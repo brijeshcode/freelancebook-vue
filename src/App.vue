@@ -2,7 +2,6 @@
   <div id="app">
     <!-- Your existing app content -->
     <RouterView />
-    hi
     <!-- Add Notivue component - this handles all notifications -->
     <Notivue v-slot="item">
       <Notification :item="item" />

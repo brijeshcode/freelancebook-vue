@@ -143,58 +143,80 @@
 
       <!-- User Profile Section -->
       <div class="absolute bottom-0 w-full p-4 border-t border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-          <div class="flex-shrink-0">
-            <img
-              class="h-8 w-8 rounded-full"
-              :src="user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=3B82F6&color=fff`"
-              :alt="user?.name"
-            />
-          </div>
-          <div class="ml-3 flex-1 min-w-0">
-            <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-              {{ user?.name }}
-            </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {{ user?.email }}
-            </p>
-          </div>
-          <div class="ml-2 flex-shrink-0">
-            <button
-              @click="toggleUserMenu"
-              class="bg-white dark:bg-gray-800 rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
-            >
-              <ChevronUp v-if="userMenuOpen" class="h-5 w-5 text-gray-400" />
-              <ChevronDown v-else class="h-5 w-5 text-gray-400" />
-            </button>
-          </div>
-        </div>
+        <div class="relative" ref="userSectionRef">
+          <button
+            @click.stop="toggleUserMenu"
+            class="w-full flex items-center text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors duration-200"
+          >
+            <div class="flex-shrink-0">
+              <img
+                class="h-8 w-8 rounded-full"
+                :src="user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=3B82F6&color=fff`"
+                :alt="user?.name || 'User'"
+              />
+            </div>
+            <div class="ml-3 flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {{ user?.name || 'User' }}
+              </p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {{ user?.email || 'user@example.com' }}
+              </p>
+            </div>
+            <div class="ml-2 flex-shrink-0">
+              <ChevronUp v-if="userMenuOpen" class="h-5 w-5 text-gray-400 transition-transform duration-200" />
+              <ChevronDown v-else class="h-5 w-5 text-gray-400 transition-transform duration-200" />
+            </div>
+          </button>
 
-        <!-- User Dropdown Menu -->
-        <div 
-          v-if="userMenuOpen"
-          class="mt-2 bg-white dark:bg-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
-        >
-          <div class="py-1">
-            <router-link
-              to="/profile"
-              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+          <!-- User Dropdown Menu -->
+          <Transition
+            enter-active-class="transition ease-out duration-200"
+            enter-from-class="transform opacity-0 scale-95"
+            enter-to-class="transform opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-75"
+            leave-from-class="transform opacity-100 scale-100"
+            leave-to-class="transform opacity-0 scale-95"
+          >
+            <div 
+              v-if="userMenuOpen"
+              ref="userMenuRef"
+              @click.stop
+              class="user-menu absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
             >
-              Your Profile
-            </router-link>
-            <button
-              @click="toggleDarkMode"
-              class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
-            >
-              {{ isDarkMode ? 'Light Mode' : 'Dark Mode' }}
-            </button>
-            <button
-              @click="handleLogout"
-              class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
-            >
-              Sign out
-            </button>
-          </div>
+              <div class="py-1">
+                <router-link
+                  to="/profile"
+                  class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200"
+                  @click="userMenuOpen = false"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                  </svg>
+                  Your Profile
+                </router-link>
+                
+                <!-- Dark Mode Toggle with Theme Store -->
+                <div class="px-4 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200">
+                  <div class="flex items-center">
+                    <svg class="mr-2 h-4 w-4 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Dark Mode</span>
+                  </div>
+                  <DarkModeToggle />
+                </div>
+                
+                <button
+                  @click="handleLogout"
+                  class="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200"
+                >
+                  <LogOut class="mr-2 h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          </Transition>
         </div>
       </div>
     </div>
@@ -235,8 +257,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { logout } from '@/services/authService'
+import { Transition } from 'vue'
+import { useThemeStore } from '@/stores/themeStore'
+import { logout, getStoredUser } from '@/services/authService'
 import { useNotifications } from '@/composables/useNotifications'
+import DarkModeToggle from '@/components/DarkModeToggle.vue'
 import {
   Home,
   Users,
@@ -249,24 +274,23 @@ import {
   Menu,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  LogOut
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const themeStore = useThemeStore()
 
 // State
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
-const isDarkMode = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
+const userSectionRef = ref<HTMLElement | null>(null)
 
-// Mock user data - replace with actual user store/auth
-const user = ref({
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  avatar: null
-})
+// Get user data from your authService
+const user = computed(() => getStoredUser())
 
 // Methods
 const toggleSidebar = () => {
@@ -275,18 +299,6 @@ const toggleSidebar = () => {
 
 const toggleUserMenu = () => {
   userMenuOpen.value = !userMenuOpen.value
-}
-
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value
-  // Apply dark mode to document
-  if (isDarkMode.value) {
-    document.documentElement.classList.add('dark')
-    localStorage.setItem('darkMode', 'true')
-  } else {
-    document.documentElement.classList.remove('dark')
-    localStorage.setItem('darkMode', 'false')
-  }
 }
 
 const isActiveRoute = (path: string): boolean => {
@@ -301,6 +313,7 @@ const handleLogout = async () => {
     })
     router.push('/login')
   } catch (error) {
+    console.error('Logout error:', error)
     notifications.error('Error logging out', {
       title: 'Logout Failed'
     })
@@ -316,20 +329,18 @@ const handleResize = () => {
 
 // Close user menu when clicking outside
 const handleClickOutside = (event: Event) => {
-  if (userMenuOpen.value && !(event.target as Element).closest('.user-menu')) {
+  if (userMenuOpen.value && 
+      userSectionRef.value && 
+      !userSectionRef.value.contains(event.target as Node)) {
     userMenuOpen.value = false
   }
 }
 
 // Lifecycle
 onMounted(() => {
-  // Check for saved dark mode preference
-  const savedDarkMode = localStorage.getItem('darkMode')
-  if (savedDarkMode === 'true') {
-    isDarkMode.value = true
-    document.documentElement.classList.add('dark')
-  }
-
+  // Initialize theme store
+  themeStore.initializeDarkMode()
+  
   window.addEventListener('resize', handleResize)
   document.addEventListener('click', handleClickOutside)
 })

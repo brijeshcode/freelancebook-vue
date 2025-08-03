@@ -140,62 +140,62 @@ const router = createRouter({
             title: 'Edit Service'
           }
         },
-        // {
-        //   path: 'invoices',
-        //   name: 'Invoices',
-        //   component: () => import('@/views/invoices/Index.vue'),
-        //   meta: {
-        //     title: 'Invoices'
-        //   }
-        // },
-        // {
-        //   path: 'invoices/create',
-        //   name: 'InvoiceCreate',
-        //   component: () => import('@/views/invoices/Create.vue'),
-        //   meta: {
-        //     title: 'Create Invoice'
-        //   }
-        // },
-        // {
-        //   path: 'invoices/:id',
-        //   name: 'InvoiceShow',
-        //   component: () => import('@/views/invoices/Show.vue'),
-        //   meta: {
-        //     title: 'Invoice Details'
-        //   }
-        // },
-        // {
-        //   path: 'invoices/:id/edit',
-        //   name: 'InvoiceEdit',
-        //   component: () => import('@/views/invoices/Edit.vue'),
-        //   meta: {
-        //     title: 'Edit Invoice'
-        //   }
-        // },
-        // {
-        //   path: 'payments',
-        //   name: 'Payments',
-        //   component: () => import('@/views/payments/Index.vue'),
-        //   meta: {
-        //     title: 'Payments'
-        //   }
-        // },
-        // {
-        //   path: 'payments/create',
-        //   name: 'PaymentCreate',
-        //   component: () => import('@/views/payments/Create.vue'),
-        //   meta: {
-        //     title: 'Record Payment'
-        //   }
-        // },
-        // {
-        //   path: 'payments/:id',
-        //   name: 'PaymentShow',
-        //   component: () => import('@/views/payments/Show.vue'),
-        //   meta: {
-        //     title: 'Payment Details'
-        //   }
-        // },
+        {
+          path: 'invoices',
+          name: 'Invoices',
+          component: () => import('@/views/invoices/Index.vue'),
+          meta: {
+            title: 'Invoices'
+          }
+        },
+        {
+          path: 'invoices/create',
+          name: 'InvoiceCreate',
+          component: () => import('@/views/invoices/Create.vue'),
+          meta: {
+            title: 'Create Invoice'
+          }
+        },
+        {
+          path: 'invoices/:id',
+          name: 'InvoiceShow',
+          component: () => import('@/views/invoices/Show.vue'),
+          meta: {
+            title: 'Invoice Details'
+          }
+        },
+        {
+          path: 'invoices/:id/edit',
+          name: 'InvoiceEdit',
+          component: () => import('@/views/invoices/Edit.vue'),
+          meta: {
+            title: 'Edit Invoice'
+          }
+        },
+        {
+          path: 'payments',
+          name: 'Payments',
+          component: () => import('@/views/payments/Index.vue'),
+          meta: {
+            title: 'Payments'
+          }
+        },
+        {
+          path: 'payments/create',
+          name: 'PaymentCreate',
+          component: () => import('@/views/payments/Create.vue'),
+          meta: {
+            title: 'Record Payment'
+          }
+        },
+        {
+          path: 'payments/:id',
+          name: 'PaymentShow',
+          component: () => import('@/views/payments/Show.vue'),
+          meta: {
+            title: 'Payment Details'
+          }
+        },
         // {
         //   path: 'recurring-services',
         //   name: 'RecurringServices',
@@ -236,14 +236,14 @@ const router = createRouter({
         //     title: 'Reports'
         //   }
         // },
-        // {
-        //   path: 'settings',
-        //   name: 'Settings',
-        //   component: () => import('@/views/settings/Index.vue'),
-        //   meta: {
-        //     title: 'Settings'
-        //   }
-        // },
+        {
+          path: 'settings',
+          name: 'Settings',
+          component: () => import('@/views/settings/Index.vue'),
+          meta: {
+            title: 'Settings'
+          }
+        },
         // {
         //   path: 'profile',
         //   name: 'Profile',
