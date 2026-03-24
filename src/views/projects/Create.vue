@@ -389,10 +389,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useProjectStore } from '@/stores/ProjectStore'
+import { useClientStore } from '@/stores/ClientStore'
 import {
   ArrowLeft,
   Loader2
@@ -401,19 +402,14 @@ import {
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const projectStore = useProjectStore()
+const clientStore = useClientStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
-
-// State
-const loading = ref(false)
-const loadingClients = ref(false)
-const errors = ref<Record<string, string[]>>({})
-const clients = ref<Client[]>([])
+// Bind store state
+const loading = computed(() => projectStore.saving)
+const loadingClients = computed(() => clientStore.loading)
+const errors = computed(() => projectStore.errors)
+const clients = computed(() => clientStore.clients)
 
 // Form data
 const form = reactive({
@@ -435,69 +431,35 @@ const form = reactive({
 
 // Methods
 const fetchClients = async () => {
-  loadingClients.value = true
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-    
-    // Pre-select client if passed via query parameter
-    if (route.query.client_id) {
-      form.client_id = route.query.client_id.toString()
-    }
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  } finally {
-    loadingClients.value = false
+  await clientStore.fetchClients({ per_page: 100 })
+  if (route.query.client_id) {
+    form.client_id = route.query.client_id.toString()
   }
 }
 
 const handleSubmit = async () => {
-  loading.value = true
-  errors.value = {}
+  const data = { ...form }
+  if (!data.budget) data.budget = null
+  if (!data.estimated_hours) data.estimated_hours = null
+  if (!data.start_date) data.start_date = null
+  if (!data.end_date) data.end_date = null
+  if (!data.deadline) data.deadline = null
+  if (!data.notes) data.notes = null
+  if (!data.project_details) data.project_details = null
 
-  try {
-    // Prepare data - clean up empty values
-    const data = { ...form }
-    
-    // Convert empty strings to null for optional fields
-    if (!data.budget) data.budget = null
-    if (!data.estimated_hours) data.estimated_hours = null
-    if (!data.start_date) data.start_date = null
-    if (!data.end_date) data.end_date = null
-    if (!data.deadline) data.deadline = null
-    if (!data.notes) data.notes = null
-    if (!data.project_details) data.project_details = null
+  const project = await projectStore.createProject(data)
 
-    const response = await axios.post('/projects', data)
-    
-    notifications.success('Project created successfully', {
-      title: 'Success'
-    })
-
-    // Redirect to the project details page
-    router.push(`/projects/${response.data.data.id}`)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      // Handle validation errors
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to create project', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (project) {
+    notifications.success('Project created successfully', { title: 'Success' })
+    router.push(`/projects/${project.id}`)
+  } else if (Object.keys(projectStore.errors).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to create project', { title: 'Error' })
   }
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchClients()
-})
+onMounted(() => fetchClients())
+onUnmounted(() => projectStore.clearErrors())
 </script>

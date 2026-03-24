@@ -21,7 +21,7 @@
 
     <!-- Filters & Search -->
     <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-      <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
         <!-- Search -->
         <div class="md:col-span-2">
           <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -87,6 +87,20 @@
             id="date-from"
             v-model="filters.date_from"
             type="date"
+            class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
+            @change="fetchInvoices"
+          />
+        </div>
+
+        <!-- Billing Month -->
+        <div>
+          <label for="billing-month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Billing Month
+          </label>
+          <input
+            id="billing-month"
+            v-model="filters.billing_month"
+            type="month"
             class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
             @change="fetchInvoices"
           />
@@ -233,6 +247,9 @@
                 Amount
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Invoice Month
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Dates
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -281,14 +298,21 @@
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm">
                   <div class="text-gray-900 dark:text-white font-medium">
-                    {{ invoice.currency }} {{ formatCurrency(invoice.total_amount) }}
+                    {{ invoice.currency?.symbol }} {{ formatCurrency(invoice.total_amount) }}
                   </div>
                   <div v-if="invoice.tax_amount > 0" class="text-gray-500 dark:text-gray-400">
-                    Tax: {{ invoice.currency }} {{ formatCurrency(invoice.tax_amount) }}
+                    Tax: {{ invoice.currency?.symbol }} {{ formatCurrency(invoice.tax_amount) }}
                   </div>
                   <div class="text-gray-500 dark:text-gray-400">
-                    Subtotal: {{ invoice.currency }} {{ formatCurrency(invoice.subtotal) }}
+                    Subtotal: {{ invoice.currency?.symbol }} {{ formatCurrency(invoice.subtotal) }}
                   </div>
+                </div>
+              </td>
+
+              <!-- Invoice Month -->
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900 dark:text-white">
+                  {{ invoice.billing_month ? new Date(invoice.billing_month).toLocaleString('en-US', { month: 'long', year: 'numeric' }) : '—' }}
                 </div>
               </td>
 
@@ -356,19 +380,17 @@
                     <Download class="h-4 w-4" />
                   </button>
 
-                  <!-- Edit (only for draft and sent invoices) -->
+                  <!-- Print Preview -->
                   <router-link
-                   
-                    :to="`/invoices/${invoice.id}/edit`"
-                    class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors duration-200"
-                    title="Edit Invoice"
+                    :to="`/invoices/${invoice.id}/print`"
+                    class="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200"
+                    title="Print Invoice"
                   >
-                    <Pencil class="h-4 w-4" />
+                    <Printer class="h-4 w-4" />
                   </router-link>
 
-                  <!-- Edit (only for draft and sent invoices) -->
+                  <!-- Edit -->
                   <router-link
-                    v-if="['draft', 'sent'].includes(invoice.status)"
                     :to="`/invoices/${invoice.id}/edit`"
                     class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors duration-200"
                     title="Edit Invoice"
@@ -502,9 +524,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { useInvoiceStore } from '@/stores/InvoiceStore'
+import { useClientStore } from '@/stores/ClientStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   Plus,
@@ -512,6 +536,7 @@ import {
   FileText,
   Eye,
   Pencil,
+  Printer,
   Trash2,
   Send,
   Download,
@@ -523,149 +548,33 @@ import {
   DollarSign,
   Clock
 } from 'lucide-vue-next'
+import type { Invoice } from '@/services/System/InvoiceService'
 
 const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const invoiceStore = useInvoiceStore()
+const clientStore = useClientStore()
 
-interface Project {
-  id: number
-  name: string
-}
+const { invoices, pagination, stats, loading, deleting, filters } = storeToRefs(invoiceStore)
+const { clients } = storeToRefs(clientStore)
 
-interface Invoice {
-  id: number
-  invoice_number: string
-  client_id: number
-  project_id: number | null
-  freelancer_id: number
-  invoice_date: string
-  due_date: string | null
-  notes: string | null
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
-  currency: string
-  exchange_rate: number
-  subtotal: number
-  tax_amount: number
-  total_amount: number
-  total_amount_base_currency: number
-  tax_rate: number
-  tax_label: string | null
-  sent_at: string | null
-  client: Client | null
-  project: Project | null
-  created_at: string
-  updated_at: string
-}
-
-interface Pagination {
-  current_page: number
-  per_page: number
-  total: number
-  last_page: number
-  from: number
-  to: number
-  has_more_pages: boolean
-  next_page_url: string | null
-  prev_page_url: string | null
-  first_page_url: string
-  last_page_url: string
-}
-
-interface Stats {
-  total_invoices: number
-  total_billed: number
-  outstanding_balance: number
-  overdue_invoices: number
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const invoices = ref<Invoice[]>([])
-const clients = ref<Client[]>([])
-const pagination = ref<Pagination | null>(null)
+// Local UI state
 const showDeleteModal = ref(false)
 const invoiceToDelete = ref<Invoice | null>(null)
 const searchTimeout = ref<number | null>(null)
 
-const stats = ref<Stats>({
-  total_invoices: 0,
-  total_billed: 0,
-  outstanding_balance: 0,
-  overdue_invoices: 0
-})
-
-const filters = reactive({
-  search: '',
-  status: '',
-  client_id: '',
-  date_from: '',
-  per_page: 15
-})
-
 // Methods
-const fetchInvoices = async (page = 1) => {
-  loading.value = true
-  try {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: filters.per_page.toString()
-    })
-
-    if (filters.search) params.append('search', filters.search)
-    if (filters.status) params.append('status', filters.status)
-    if (filters.client_id) params.append('client_id', filters.client_id)
-    if (filters.date_from) params.append('date_from', filters.date_from)
-
-    const response = await axios.get(`/invoices?${params}`)
-    invoices.value = response.data.data
-    pagination.value = response.data.pagination
-  } catch (error: any) {
-    notifications.error('Failed to load invoices', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchClients = async () => {
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load clients:', error)
-  }
-}
-
-const fetchStats = async () => {
-  try {
-    const response = await axios.get('/invoices/stats')
-    stats.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load stats:', error)
-  }
-}
+const fetchInvoices = () => invoiceStore.fetchInvoices(1)
 
 const debounceSearch = () => {
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
-  }
-  searchTimeout.value = setTimeout(() => {
-    fetchInvoices(1)
-  }, 300)
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => invoiceStore.fetchInvoices(1), 300)
 }
 
 const changePage = (page: number) => {
   if (page >= 1 && pagination.value && page <= pagination.value.last_page) {
-    fetchInvoices(page)
+    invoiceStore.fetchInvoices(page)
   }
 }
 
@@ -707,69 +616,31 @@ const getStatusLabel = (status: string): string => {
 }
 
 const isOverdue = (invoice: Invoice): boolean => {
-  if (!invoice.due_date || invoice.status === 'paid' || invoice.status === 'cancelled') {
-    return false
-  }
-  return new Date(invoice.due_date) < new Date() && invoice.status !== 'paid'
+  if (!invoice.due_date || invoice.status === 'paid' || invoice.status === 'cancelled') return false
+  return new Date(invoice.due_date) < new Date()
 }
 
 const markAsSent = async (invoice: Invoice) => {
-  try {
-    const response = await axios.patch(`/invoices/${invoice.id}/mark-as-sent`)
-    
-    // Update the invoice in the list
-    const index = invoices.value.findIndex(i => i.id === invoice.id)
-    if (index !== -1) {
-      invoices.value[index] = response.data.data
-    }
-    
-    notifications.success('Invoice marked as sent successfully', {
-      title: 'Success'
-    })
-    
-    // Refresh stats
-    await fetchStats()
-  } catch (error: any) {
-    notifications.error('Failed to mark invoice as sent', {
-      title: 'Error'
-    })
+  const updated = await invoiceStore.markAsSent(invoice.id)
+  if (updated) {
+    notifications.success('Invoice marked as sent successfully', { title: 'Success' })
+    await invoiceStore.fetchStats()
+  } else {
+    notifications.error('Failed to mark invoice as sent', { title: 'Error' })
   }
 }
 
 const downloadPDF = async (invoice: Invoice) => {
   try {
-    const response = await axios.get(`/invoices/${invoice.id}/pdf`, {
-      responseType: 'blob'
-    })
-    
-    // Create blob link to download
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `${invoice.invoice_number}.pdf`)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-    
-    notifications.success('Invoice PDF downloaded successfully', {
-      title: 'Success'
-    })
-  } catch (error: any) {
-    notifications.error('Failed to download invoice PDF', {
-      title: 'Error'
-    })
+    await invoiceStore.downloadPDF(invoice.id, invoice.invoice_number)
+    notifications.success('Invoice PDF downloaded successfully', { title: 'Success' })
+  } catch {
+    notifications.error('Failed to download invoice PDF', { title: 'Error' })
   }
 }
 
-const copyInvoice = async (invoice: Invoice) => {
-  try {
-    router.push(`/invoices/create?copy=${invoice.id}`)
-  } catch (error: any) {
-    notifications.error('Failed to copy invoice', {
-      title: 'Error'
-    })
-  }
+const copyInvoice = (invoice: Invoice) => {
+  router.push(`/invoices/create?copy=${invoice.id}`)
 }
 
 const confirmDelete = (invoice: Invoice) => {
@@ -780,31 +651,23 @@ const confirmDelete = (invoice: Invoice) => {
 const deleteInvoice = async () => {
   if (!invoiceToDelete.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/invoices/${invoiceToDelete.value.id}`)
-    notifications.success('Invoice deleted successfully', {
-      title: 'Success'
-    })
+  const success = await invoiceStore.deleteInvoice(invoiceToDelete.value.id)
+  if (success) {
+    notifications.success('Invoice deleted successfully', { title: 'Success' })
     showDeleteModal.value = false
     invoiceToDelete.value = null
-    await fetchInvoices(pagination.value?.current_page || 1)
-    await fetchStats()
-  } catch (error: any) {
-    notifications.error('Failed to delete invoice', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
+    await invoiceStore.fetchStats()
+  } else {
+    notifications.error('Failed to delete invoice', { title: 'Error' })
   }
 }
 
 // Lifecycle
 onMounted(async () => {
   await Promise.all([
-    fetchInvoices(),
-    fetchClients(),
-    fetchStats()
+    invoiceStore.fetchInvoices(),
+    clientStore.fetchClients(),
+    invoiceStore.fetchStats(),
   ])
 })
 </script>

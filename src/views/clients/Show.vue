@@ -338,7 +338,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { useClientStore } from '@/stores/ClientStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -362,38 +363,10 @@ import {
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const clientStore = useClientStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  type: 'individual' | 'company'
-  contact_person: string | null
-  client_code: string
-  email: string | null
-  phone: string | null
-  website: string | null
-  address: string | null
-  city: string | null
-  state: string | null
-  country: string | null
-  postal_code: string | null
-  tax_number: string | null
-  notes: string | null
-  status: 'active' | 'inactive' | 'archived'
-  billing_preferences: any
-  financial: {
-    total_billed: number
-    total_received: number
-    current_balance: number
-  }
-  created_at: string
-  updated_at: string
-}
+const { currentClient: client, loading } = storeToRefs(clientStore)
 
-// State
-const loading = ref(true)
-const client = ref<Client | null>(null)
 const activeTab = ref('details')
 
 // Tabs configuration
@@ -412,44 +385,29 @@ const hasAddress = computed(() => {
 
 const fullAddress = computed(() => {
   if (!client.value) return ''
-  
+
   const parts = []
   if (client.value.address) parts.push(client.value.address)
-  
+
   const cityStateZip = [client.value.city, client.value.state, client.value.postal_code]
     .filter(Boolean)
     .join(', ')
   if (cityStateZip) parts.push(cityStateZip)
-  
+
   if (client.value.country) parts.push(client.value.country)
-  
+
   return parts.join('\n')
 })
 
 // Methods
-const fetchClient = async () => {
-  loading.value = true
-  try {
-    const response = await axios.get(`/clients/${route.params.id}`)
-    client.value = response.data.data
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Client not found', {
-        title: 'Error'
-      })
-      router.push('/clients')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to view this client', {
-        title: 'Access Denied'
-      })
-      router.push('/clients')
-    } else {
-      notifications.error('Failed to load client details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+const loadClient = async () => {
+  const id = Number(route.params.id)
+  await clientStore.fetchClient(id)
+  if (!client.value) {
+    notifications.error('Client not found or you don\'t have permission to view it', {
+      title: 'Error'
+    })
+    router.push('/clients')
   }
 }
 
@@ -489,6 +447,6 @@ const addProject = () => {
 
 // Lifecycle
 onMounted(() => {
-  fetchClient()
+  loadClient()
 })
 </script>

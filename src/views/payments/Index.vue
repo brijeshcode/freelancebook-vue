@@ -492,10 +492,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { ref, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { usePaymentStore } from '@/stores/PaymentStore'
+import { useClientStore } from '@/stores/ClientStore'
 import { useNotifications } from '@/composables/useNotifications'
+import type { Payment } from '@/services/System/PaymentService'
 import {
   Plus,
   Search,
@@ -519,135 +521,25 @@ import {
   Bitcoin
 } from 'lucide-vue-next'
 
-const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const paymentStore = usePaymentStore()
+const clientStore = useClientStore()
 
-interface Payment {
-  id: number
-  transaction_number: string
-  client_id: number
-  freelancer_id: number
-  amount: number
-  currency: string
-  exchange_rate: number
-  amount_base_currency: number
-  payment_date: string
-  payment_method: 'bank_transfer' | 'paypal' | 'stripe' | 'western_union' | 'cash' | 'check' | 'crypto' | 'other'
-  transaction_reference: string | null
-  notes: string | null
-  status: 'pending' | 'completed' | 'failed' | 'refunded'
-  verified_at: string | null
-  verified_by: number | null
-  receipt_attachments: string[] | null
-  client: Client | null
-  created_at: string
-  updated_at: string
-}
+const { loading, deleting, payments, pagination, stats, filters } = storeToRefs(paymentStore)
+const { clients } = storeToRefs(clientStore)
 
-interface Pagination {
-  current_page: number
-  per_page: number
-  total: number
-  last_page: number
-  from: number
-  to: number
-  has_more_pages: boolean
-  next_page_url: string | null
-  prev_page_url: string | null
-  first_page_url: string
-  last_page_url: string
-}
-
-interface Stats {
-  total_payments: number
-  total_received: number
-  pending_amount: number
-  this_month: number
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const payments = ref<Payment[]>([])
-const clients = ref<Client[]>([])
-const pagination = ref<Pagination | null>(null)
+// Local UI state
 const showDeleteModal = ref(false)
 const paymentToDelete = ref<Payment | null>(null)
 const searchTimeout = ref<number | null>(null)
 
-const stats = ref<Stats>({
-  total_payments: 0,
-  total_received: 0,
-  pending_amount: 0,
-  this_month: 0
-})
-
-const filters = reactive({
-  search: '',
-  status: '',
-  payment_method: '',
-  client_id: '',
-  per_page: 15
-})
-
 // Methods
-const fetchPayments = async (page = 1) => {
-  loading.value = true
-  try {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: filters.per_page.toString()
-    })
-
-    if (filters.search) params.append('search', filters.search)
-    if (filters.status) params.append('status', filters.status)
-    if (filters.payment_method) params.append('payment_method', filters.payment_method)
-    if (filters.client_id) params.append('client_id', filters.client_id)
-
-    const response = await axios.get(`/payments?${params}`)
-    payments.value = response.data.data
-    pagination.value = response.data.pagination
-  } catch (error: any) {
-    notifications.error('Failed to load payments', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchClients = async () => {
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load clients:', error)
-  }
-}
-
-const fetchStats = async () => {
-  try {
-    const response = await axios.get('/payments/stats')
-    stats.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load payment stats:', error)
-  }
-}
+const fetchPayments = (page = 1) => paymentStore.fetchPayments(page)
 
 const debounceSearch = () => {
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
-  }
-  searchTimeout.value = setTimeout(() => {
-    fetchPayments(1)
-  }, 300)
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => fetchPayments(1), 300)
 }
 
 const changePage = (page: number) => {
@@ -656,20 +548,11 @@ const changePage = (page: number) => {
   }
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = (dateString: string): string =>
+  new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
 const getStatusClass = (status: string): string => {
   const classes = {
@@ -682,63 +565,32 @@ const getStatusClass = (status: string): string => {
 }
 
 const getStatusLabel = (status: string): string => {
-  const labels = {
-    pending: 'Pending',
-    completed: 'Completed',
-    failed: 'Failed',
-    refunded: 'Refunded'
-  }
+  const labels = { pending: 'Pending', completed: 'Completed', failed: 'Failed', refunded: 'Refunded' }
   return labels[status as keyof typeof labels] || status
 }
 
 const getPaymentMethodIcon = (method: string) => {
   const icons = {
-    bank_transfer: Building,
-    paypal: Wallet,
-    stripe: CreditCard,
-    western_union: Banknote,
-    cash: DollarSign,
-    check: Banknote,
-    crypto: Bitcoin,
-    other: Wallet
+    bank_transfer: Building, paypal: Wallet, stripe: CreditCard,
+    western_union: Banknote, cash: DollarSign, check: Banknote, crypto: Bitcoin, other: Wallet
   }
   return icons[method as keyof typeof icons] || Wallet
 }
 
 const getPaymentMethodLabel = (method: string): string => {
   const labels = {
-    bank_transfer: 'Bank Transfer',
-    paypal: 'PayPal',
-    stripe: 'Stripe',
-    western_union: 'Western Union',
-    cash: 'Cash',
-    check: 'Check',
-    crypto: 'Crypto',
-    other: 'Other'
+    bank_transfer: 'Bank Transfer', paypal: 'PayPal', stripe: 'Stripe',
+    western_union: 'Western Union', cash: 'Cash', check: 'Check', crypto: 'Crypto', other: 'Other'
   }
   return labels[method as keyof typeof labels] || method
 }
 
 const verifyPayment = async (payment: Payment) => {
-  try {
-    const response = await axios.patch(`/payments/${payment.id}/verify`)
-    
-    // Update the payment in the list
-    const index = payments.value.findIndex(p => p.id === payment.id)
-    if (index !== -1) {
-      payments.value[index] = response.data.data
-    }
-    
-    notifications.success('Payment verified successfully', {
-      title: 'Success'
-    })
-    
-    // Refresh stats
-    await fetchStats()
-  } catch (error: any) {
-    notifications.error('Failed to verify payment', {
-      title: 'Error'
-    })
+  const updated = await paymentStore.verifyPayment(payment.id)
+  if (updated) {
+    await paymentStore.fetchStats()
+  } else {
+    notifications.error('Failed to verify payment', { title: 'Error' })
   }
 }
 
@@ -750,22 +602,13 @@ const confirmDelete = (payment: Payment) => {
 const deletePayment = async () => {
   if (!paymentToDelete.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/payments/${paymentToDelete.value.id}`)
-    notifications.success('Payment deleted successfully', {
-      title: 'Success'
-    })
+  const success = await paymentStore.deletePayment(paymentToDelete.value.id)
+  if (success) {
     showDeleteModal.value = false
     paymentToDelete.value = null
-    await fetchPayments(pagination.value?.current_page || 1)
-    await fetchStats()
-  } catch (error: any) {
-    notifications.error('Failed to delete payment', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
+    await paymentStore.fetchStats()
+  } else {
+    notifications.error('Failed to delete payment', { title: 'Error' })
   }
 }
 
@@ -773,8 +616,8 @@ const deletePayment = async () => {
 onMounted(async () => {
   await Promise.all([
     fetchPayments(),
-    fetchClients(),
-    fetchStats()
+    clientStore.fetchClients(),
+    paymentStore.fetchStats(),
   ])
 })
 </script>

@@ -449,10 +449,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useProjectStore } from '@/stores/ProjectStore'
+import { useClientStore } from '@/stores/ClientStore'
 import {
   ArrowLeft,
   Eye,
@@ -464,46 +465,16 @@ import {
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const projectStore = useProjectStore()
+const clientStore = useClientStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
-
-interface Project {
-  id: number
-  name: string
-  budget: number | null
-  budget_currency: string
-  notes: string | null
-  project_details: string | null
-  start_date: string | null
-  end_date: string | null
-  deadline: string | null
-  estimated_hours: number | null
-  actual_hours: number
-  total_paid: number
-  payment_currency: string
-  status: 'prospective' | 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled'
-  client: Client | null
-  freelancer: {
-    id: number
-    name: string
-  }
-  created_at: string
-  updated_at: string
-}
-
-// State
-const initialLoading = ref(true)
-const loading = ref(false)
-const loadingClients = ref(false)
-const project = ref<Project | null>(null)
-const clients = ref<Client[]>([])
-const errors = ref<Record<string, string[]>>({})
-const originalData = ref<any>({})
+// Bind store state
+const initialLoading = computed(() => projectStore.loading)
+const loading = computed(() => projectStore.saving)
+const loadingClients = computed(() => clientStore.loading)
+const project = computed(() => projectStore.currentProject)
+const clients = computed(() => clientStore.clients)
+const errors = computed(() => projectStore.errors)
 
 // Form data
 const form = reactive({
@@ -523,131 +494,57 @@ const form = reactive({
   status: 'planned' as 'prospective' | 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled'
 })
 
+const originalData = reactive({ ...form })
+
 // Computed
 const hasChanges = computed(() => {
-  return JSON.stringify(form) !== JSON.stringify(originalData.value)
+  return JSON.stringify(form) !== JSON.stringify(originalData)
 })
 
 // Methods
-const fetchProject = async () => {
-  initialLoading.value = true
-  try {
-    const response = await axios.get(`/projects/${route.params.id}`)
-    project.value = response.data.data
-    
-    // Populate form with project data
-    populateForm(project.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Project not found', {
-        title: 'Error'
-      })
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this project', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to load project details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    initialLoading.value = false
-  }
-}
-
-const fetchClients = async () => {
-  loadingClients.value = true
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  } finally {
-    loadingClients.value = false
-  }
-}
-
-const populateForm = (projectData: Project) => {
-  form.client_id = projectData.client?.id?.toString() || ''
-  form.name = projectData.name
-  form.budget = projectData.budget
-  form.budget_currency = projectData.budget_currency
-  form.notes = projectData.notes || ''
-  form.project_details = projectData.project_details || ''
-  form.start_date = projectData.start_date || ''
-  form.end_date = projectData.end_date || ''
-  form.deadline = projectData.deadline || ''
-  form.estimated_hours = projectData.estimated_hours
-  form.actual_hours = projectData.actual_hours
-  form.total_paid = projectData.total_paid
-  form.payment_currency = projectData.payment_currency
-  form.status = projectData.status
-
-  // Store original data for comparison
-  originalData.value = { ...form }
+const populateForm = () => {
+  if (!project.value) return
+  form.client_id = project.value.client?.id?.toString() || ''
+  form.name = project.value.name
+  form.budget = project.value.budget
+  form.budget_currency = project.value.budget_currency
+  form.notes = project.value.notes || ''
+  form.project_details = project.value.project_details || ''
+  form.start_date = project.value.start_date || ''
+  form.end_date = project.value.end_date || ''
+  form.deadline = project.value.deadline || ''
+  form.estimated_hours = project.value.estimated_hours
+  form.actual_hours = project.value.actual_hours
+  form.total_paid = project.value.total_paid
+  form.payment_currency = project.value.payment_currency
+  form.status = project.value.status
+  Object.assign(originalData, { ...form })
 }
 
 const handleSubmit = async () => {
   if (!hasChanges.value) {
-    notifications.info('No changes detected', {
-      title: 'Info'
-    })
+    notifications.info('No changes detected', { title: 'Info' })
     return
   }
 
-  loading.value = true
-  errors.value = {}
+  const data = { ...form }
+  if (!data.budget) data.budget = null
+  if (!data.estimated_hours) data.estimated_hours = null
+  if (!data.start_date) data.start_date = null
+  if (!data.end_date) data.end_date = null
+  if (!data.deadline) data.deadline = null
+  if (!data.notes) data.notes = null
+  if (!data.project_details) data.project_details = null
 
-  try {
-    // Prepare data - clean up empty values
-    const data = { ...form }
-    
-    // Convert empty strings to null for optional fields
-    if (!data.budget) data.budget = null
-    if (!data.estimated_hours) data.estimated_hours = null
-    if (!data.start_date) data.start_date = null
-    if (!data.end_date) data.end_date = null
-    if (!data.deadline) data.deadline = null
-    if (!data.notes) data.notes = null
-    if (!data.project_details) data.project_details = null
+  const updated = await projectStore.updateProject(Number(route.params.id), data)
 
-    const response = await axios.put(`/projects/${route.params.id}`, data)
-    
-    notifications.success('Project updated successfully', {
-      title: 'Success'
-    })
-
-    // Update the project data and original form data
-    project.value = response.data.data
-    populateForm(project.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      // Handle validation errors
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else if (error.response?.status === 404) {
-      notifications.error('Project not found', {
-        title: 'Error'
-      })
-      router.push('/projects')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this project', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to update project', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (updated) {
+    notifications.success('Project updated successfully', { title: 'Success' })
+    populateForm()
+  } else if (Object.keys(projectStore.errors).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to update project', { title: 'Error' })
   }
 }
 
@@ -686,8 +583,19 @@ const getStatusLabel = (status: string): string => {
 // Lifecycle
 onMounted(async () => {
   await Promise.all([
-    fetchProject(),
-    fetchClients()
+    projectStore.fetchProject(Number(route.params.id)),
+    clientStore.fetchClients({ per_page: 100 })
   ])
+  if (project.value) {
+    populateForm()
+  } else {
+    notifications.error('Project not found', { title: 'Error' })
+    router.push('/projects')
+  }
+})
+
+onUnmounted(() => {
+  projectStore.clearErrors()
+  projectStore.clearCurrentProject()
 })
 </script>

@@ -84,7 +84,7 @@
                 <dl>
                   <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Base Amount</dt>
                   <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                    {{ service.currency }} {{ formatCurrency(service.base_amount) }}
+                    {{ service.currency?.code ?? '' }} {{ formatCurrency(service.base_amount) }}
                   </dd>
                 </dl>
               </div>
@@ -106,7 +106,7 @@
                   </dt>
                   <dd class="text-lg font-medium text-gray-900 dark:text-white">
                     {{ service.has_tax 
-                      ? `${service.currency} ${formatCurrency(service.tax_amount)}` 
+                      ? `${service.currency?.code ?? ''} ${formatCurrency(service.tax_amount)}`
                       : 'Not applicable' 
                     }}
                   </dd>
@@ -127,7 +127,7 @@
                 <dl>
                   <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Amount</dt>
                   <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                    {{ service.currency }} {{ formatCurrency(service.total_amount) }}
+                    {{ service.currency?.code ?? '' }} {{ formatCurrency(service.total_amount) }}
                   </dd>
                 </dl>
               </div>
@@ -242,7 +242,7 @@
                   <div>
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Base Amount</dt>
                     <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                      {{ service.currency }} {{ formatCurrency(service.base_amount) }}
+                      {{ service.currency?.code ?? '' }} {{ formatCurrency(service.base_amount) }}
                     </dd>
                   </div>
                   <div v-if="service.has_tax">
@@ -250,13 +250,13 @@
                       {{ service.tax_name }} ({{ service.tax_rate }}% {{ service.tax_type }})
                     </dt>
                     <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                      {{ service.currency }} {{ formatCurrency(service.tax_amount) }}
+                      {{ service.currency?.code ?? '' }} {{ formatCurrency(service.tax_amount) }}
                     </dd>
                   </div>
                   <div class="border-t border-gray-200 dark:border-gray-600 pt-3">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Amount</dt>
                     <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                      {{ service.currency }} {{ formatCurrency(service.total_amount) }}
+                      {{ service.currency?.code ?? '' }} {{ formatCurrency(service.total_amount) }}
                     </dd>
                   </div>
                 </dl>
@@ -424,7 +424,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { useFreelanceServiceStore } from '@/stores/FreelanceServiceStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -447,51 +448,9 @@ const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-}
+const serviceStore = useFreelanceServiceStore()
+const { currentService: service, loading } = storeToRefs(serviceStore)
 
-interface Project {
-  id: number
-  name: string
-}
-
-interface Service {
-  id: number
-  client_id: number
-  project_id: number | null
-  title: string
-  description: string | null
-  amount: number
-  currency: string
-  has_tax: boolean
-  tax_name: string | null
-  tax_rate: number
-  tax_type: 'inclusive' | 'exclusive'
-  frequency: 'one-time' | 'weekly' | 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
-  start_date: string
-  next_billing_date: string | null
-  end_date: string | null
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled' | 'pending_approval'
-  is_active: boolean
-  billing_count: number
-  last_billed_at: string | null
-  tags: string[] | null
-  notes: string | null
-  base_amount: number
-  tax_amount: number
-  total_amount: number
-  client: Client | null
-  project: Project | null
-  created_at: string
-  updated_at: string
-}
-
-// State
-const loading = ref(true)
-const service = ref<Service | null>(null)
 const activeTab = ref('details')
 
 // Tabs configuration
@@ -503,46 +462,26 @@ const tabs = [
 
 // Methods
 const fetchService = async () => {
-  loading.value = true
-  try {
-    const response = await axios.get(`/services/${route.params.id}`)
-    service.value = response.data.data
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Service not found', {
-        title: 'Error'
-      })
-      router.push('/services')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to view this service', {
-        title: 'Access Denied'
-      })
-      router.push('/services')
-    } else {
-      notifications.error('Failed to load service details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  await serviceStore.fetchService(Number(route.params.id))
+
+  if (!service.value) {
+    notifications.error('Service not found', { title: 'Error' })
+    router.push('/services')
   }
 }
 
 const toggleActiveStatus = async () => {
   if (!service.value) return
 
-  try {
-    const response = await axios.patch(`/services/${service.value.id}/toggle-status`)
-    service.value = response.data.data
-    
+  const updated = await serviceStore.toggleStatus(service.value.id)
+
+  if (updated) {
     notifications.success(
-      `Service ${service.value.is_active ? 'activated' : 'deactivated'} successfully`,
+      `Service ${updated.is_active ? 'activated' : 'deactivated'} successfully`,
       { title: 'Success' }
     )
-  } catch (error: any) {
-    notifications.error('Failed to toggle service status', {
-      title: 'Error'
-    })
+  } else {
+    notifications.error('Failed to toggle service status', { title: 'Error' })
   }
 }
 

@@ -110,25 +110,21 @@
               </label>
               <select
                 id="currency"
-                v-model="form.currency"
+                v-model="form.currency_id"
                 :class="[
                   'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                  errors.currency 
-                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
+                  errors.currency_id
+                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 ]"
-                @change="calculateBaseAmount"
               >
                 <option value="">Select currency</option>
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="INR">INR - Indian Rupee</option>
-                <option value="CAD">CAD - Canadian Dollar</option>
-                <option value="AUD">AUD - Australian Dollar</option>
+                <option v-for="currency in currencies" :key="currency.id" :value="currency.id">
+                  {{ currency.code }} - {{ currency.name }}
+                </option>
               </select>
-              <p v-if="errors.currency" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ errors.currency[0] }}
+              <p v-if="errors.currency_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ errors.currency_id[0] }}
               </p>
             </div>
 
@@ -358,7 +354,7 @@
             <div class="flex justify-between">
               <span class="text-sm text-gray-500 dark:text-gray-400">Payment Amount:</span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ form.currency }} {{ formatCurrency(form.amount || 0) }}
+                {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(form.amount || 0) }}
               </span>
             </div>
             
@@ -415,8 +411,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { usePaymentStore } from '@/stores/PaymentStore'
+import { useListDataStore } from '@/stores/ListDataStore'
 import { useNotifications } from '@/composables/useNotifications'
+import type { CalculationType } from '@/Types/Currency'
+import type { PaymentMethod } from '@/Types/Payment'
 import {
   ArrowLeft,
   Info,
@@ -430,24 +430,13 @@ const router = useRouter()
 const route = useRoute()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const paymentStore = usePaymentStore()
+const listDataStore = useListDataStore()
 
-interface ClientBalance {
-  outstanding_balance: number
-  total_invoiced: number
-  total_paid: number
-}
+const { saving: loading, errors, clientBalance } = storeToRefs(paymentStore)
+const { currencies, clients } = storeToRefs(listDataStore)
 
-// State
-const loading = ref(false)
-const clients = ref<Client[]>([])
-const clientBalance = ref<ClientBalance | null>(null)
-const errors = ref<Record<string, string[]>>({})
+// Local UI state
 const uploadedFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement>()
 
@@ -456,71 +445,58 @@ const today = new Date().toISOString().split('T')[0]
 const form = reactive({
   client_id: '',
   amount: 0,
-  currency: 'USD',
+  currency_id: '' as string | number,
   exchange_rate: 1.000000,
+  calculation_type: 'multiply' as CalculationType,
   payment_date: today,
-  payment_method: '',
+  payment_method: '' as PaymentMethod,
   transaction_reference: '',
   notes: '',
-  status: 'completed',
+  status: 'completed' as 'pending' | 'completed' | 'failed' | 'refunded',
   receipt_attachments: [] as string[]
 })
 
 // Computed
 const baseAmount = computed(() => {
-  return (form.amount || 0) * form.exchange_rate
+  const amount = form.amount || 0
+  if (form.calculation_type === 'divide') {
+    return form.exchange_rate ? amount / form.exchange_rate : 0
+  }
+  return amount * form.exchange_rate
 })
 
+const selectedCurrency = computed(() =>
+  currencies.value.find(c => c.id === Number(form.currency_id))
+)
+
 // Methods
-const fetchClients = async () => {
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  }
-}
-
 const onClientChange = async () => {
-  clientBalance.value = null
-  
-  if (form.client_id) {
-    await fetchClientBalance()
-  }
-}
+  paymentStore.clearClientBalance()
 
-const fetchClientBalance = async () => {
-  try {
-    const response = await axios.get(`/clients/${form.client_id}/balance`)
-    clientBalance.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load client balance:', error)
+  if (form.client_id) {
+    await paymentStore.fetchClientBalance(Number(form.client_id))
   }
 }
 
 const calculateBaseAmount = () => {
-  // This is reactive, so the computed property will update automatically
+  // Computed property updates automatically
 }
 
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
-  
+
   if (files) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      
-      // Validate file size (10MB max)
+
       if (file.size > 10 * 1024 * 1024) {
         notifications.error(`File ${file.name} is too large. Maximum size is 10MB.`, {
           title: 'File Upload Error'
         })
         continue
       }
-      
-      // Validate file type
+
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
       if (!allowedTypes.includes(file.type)) {
         notifications.error(`File ${file.name} is not a supported format.`, {
@@ -528,15 +504,12 @@ const handleFileUpload = (event: Event) => {
         })
         continue
       }
-      
+
       uploadedFiles.value.push(file)
     }
   }
-  
-  // Reset the input
-  if (target) {
-    target.value = ''
-  }
+
+  if (target) target.value = ''
 }
 
 const removeFile = (index: number) => {
@@ -551,74 +524,40 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
-
-const uploadFiles = async (): Promise<string[]> => {
-  if (uploadedFiles.value.length === 0) return []
-  
-  const formData = new FormData()
-  uploadedFiles.value.forEach((file, index) => {
-    formData.append(`files[${index}]`, file)
-  })
-  
-  try {
-    const response = await axios.post('/payments/upload-receipts', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    return response.data.file_paths || []
-  } catch (error: any) {
-    notifications.error('Failed to upload receipt files', {
-      title: 'Upload Error'
-    })
-    return []
-  }
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const createPayment = async () => {
-  loading.value = true
-  errors.value = {}
-  
-  try {
-    // Upload files first if any
-    if (uploadedFiles.value.length > 0) {
-      form.receipt_attachments = await uploadFiles()
+  paymentStore.clearErrors()
+
+  // Upload receipt files first if any
+  if (uploadedFiles.value.length > 0) {
+    const paths = await paymentStore.uploadReceipts(uploadedFiles.value)
+    if (paths.length === 0 && uploadedFiles.value.length > 0) {
+      notifications.error('Failed to upload receipt files', { title: 'Upload Error' })
+      return
     }
-    
-    const response = await axios.post('/payments', form)
-    
-    notifications.success('Payment recorded successfully', {
-      title: 'Success'
-    })
-    
-    router.push(`/payments/${response.data.data.id}`)
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      errors.value = error.response.data.errors || {}
-      notifications.error('Please check the form for errors', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to record payment', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+    form.receipt_attachments = paths
+  }
+
+  const payment = await paymentStore.createPayment({ ...form })
+
+  if (payment) {
+    router.push(`/payments/${payment.id}`)
+  } else if (Object.keys(errors.value).length > 0) {
+    notifications.error('Please check the form for errors', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to record payment', { title: 'Error' })
   }
 }
 
 // Lifecycle
 onMounted(async () => {
-  await fetchClients()
-  
-  // Check if pre-selecting a client from query params
+  await Promise.all([
+    listDataStore.getClients(),
+    listDataStore.getCurrencies(),
+  ])
+
   const clientId = route.query.client_id as string
   if (clientId) {
     form.client_id = clientId

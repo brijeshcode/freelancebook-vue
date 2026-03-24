@@ -405,7 +405,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { usePaymentStore } from '@/stores/PaymentStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -434,99 +435,33 @@ const router = useRouter()
 const route = useRoute()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const paymentStore = usePaymentStore()
 
-interface ClientBalance {
-  outstanding_balance: number
-  total_invoiced: number
-  total_paid: number
-}
+const { loading, deleting, currentPayment: payment, clientBalance } = storeToRefs(paymentStore)
 
-interface Payment {
-  id: number
-  transaction_number: string
-  client_id: number
-  freelancer_id: number
-  amount: number
-  currency: string
-  exchange_rate: number
-  amount_base_currency: number
-  payment_date: string
-  payment_method: 'bank_transfer' | 'paypal' | 'stripe' | 'western_union' | 'cash' | 'check' | 'crypto' | 'other'
-  transaction_reference: string | null
-  notes: string | null
-  status: 'pending' | 'completed' | 'failed' | 'refunded'
-  verified_at: string | null
-  verified_by: number | null
-  receipt_attachments: string[] | null
-  client: Client | null
-  created_at: string
-  updated_at: string
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const payment = ref<Payment | null>(null)
-const clientBalance = ref<ClientBalance | null>(null)
-const error = ref<string>('')
+// Local UI state
+const error = ref('')
 const showDeleteModal = ref(false)
 
 // Methods
-const fetchPayment = async () => {
-  loading.value = true
+const loadPayment = async () => {
   error.value = ''
-  
-  try {
-    const response = await axios.get(`/payments/${route.params.id}`)
-    payment.value = response.data.data
-    
-    // Fetch client balance
-    if (payment.value.client_id) {
-      await fetchClientBalance()
-    }
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      error.value = 'Payment not found'
-    } else {
-      error.value = 'Failed to load payment'
-    }
-    notifications.error(error.value, {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
+  await paymentStore.fetchPayment(Number(route.params.id))
+
+  if (!payment.value) {
+    error.value = 'Payment not found'
+    notifications.error(error.value, { title: 'Error' })
+    return
   }
+
+  await paymentStore.fetchClientBalance(payment.value.client_id)
 }
 
-const fetchClientBalance = async () => {
-  try {
-    const response = await axios.get(`/clients/${payment.value?.client_id}/balance`)
-    clientBalance.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load client balance:', error)
-  }
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
-
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = (dateString: string): string =>
+  new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
 const getStatusClass = (status: string): string => {
   const classes = {
@@ -539,141 +474,56 @@ const getStatusClass = (status: string): string => {
 }
 
 const getStatusLabel = (status: string): string => {
-  const labels = {
-    pending: 'Pending',
-    completed: 'Completed',
-    failed: 'Failed',
-    refunded: 'Refunded'
-  }
+  const labels = { pending: 'Pending', completed: 'Completed', failed: 'Failed', refunded: 'Refunded' }
   return labels[status as keyof typeof labels] || status
 }
 
 const getPaymentMethodIcon = (method: string) => {
   const icons = {
-    bank_transfer: Building,
-    paypal: Wallet,
-    stripe: CreditCard,
-    western_union: Banknote,
-    cash: DollarSign,
-    check: Banknote,
-    crypto: Bitcoin,
-    other: Wallet
+    bank_transfer: Building, paypal: Wallet, stripe: CreditCard,
+    western_union: Banknote, cash: DollarSign, check: Banknote, crypto: Bitcoin, other: Wallet
   }
   return icons[method as keyof typeof icons] || Wallet
 }
 
 const getPaymentMethodLabel = (method: string): string => {
   const labels = {
-    bank_transfer: 'Bank Transfer',
-    paypal: 'PayPal',
-    stripe: 'Stripe',
-    western_union: 'Western Union',
-    cash: 'Cash',
-    check: 'Check',
-    crypto: 'Cryptocurrency',
-    other: 'Other'
+    bank_transfer: 'Bank Transfer', paypal: 'PayPal', stripe: 'Stripe',
+    western_union: 'Western Union', cash: 'Cash', check: 'Check', crypto: 'Cryptocurrency', other: 'Other'
   }
   return labels[method as keyof typeof labels] || method
 }
 
+const getFileExtension = (filename: string): string => filename.split('.').pop() || ''
+const getFileName = (filepath: string): string => filepath.split('/').pop() || filepath
+
 const getFileIcon = (filename: string) => {
-  const extension = getFileExtension(filename).toLowerCase()
-  
-  if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
-    return FileImage
-  } else if (extension === 'pdf') {
-    return FileType
-  } else {
-    return File
-  }
-}
-
-const getFileName = (filepath: string): string => {
-  return filepath.split('/').pop() || filepath
-}
-
-const getFileExtension = (filename: string): string => {
-  return filename.split('.').pop() || ''
+  const ext = getFileExtension(filename).toLowerCase()
+  if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) return FileImage
+  if (ext === 'pdf') return FileType
+  return File
 }
 
 const verifyPayment = async () => {
   if (!payment.value) return
-  
-  loading.value = true
-  try {
-    const response = await axios.patch(`/payments/${payment.value.id}/verify`)
-    payment.value = response.data.data
-    
-    notifications.success('Payment verified successfully', {
-      title: 'Success'
-    })
-    
-    // Refresh client balance
-    await fetchClientBalance()
-  } catch (error: any) {
-    notifications.error('Failed to verify payment', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
+  const updated = await paymentStore.verifyPayment(payment.value.id)
+  if (updated) {
+    await paymentStore.fetchClientBalance(updated.client_id)
+  } else {
+    notifications.error('Failed to verify payment', { title: 'Error' })
   }
 }
+
+const viewFile = (filepath: string) => paymentStore.viewFile(filepath)
+
+const downloadFile = (filepath: string) => paymentStore.downloadFile(filepath)
 
 const downloadReceipts = async () => {
   if (!payment.value?.receipt_attachments?.length) return
-  
-  try {
-    for (const attachment of payment.value.receipt_attachments) {
-      await downloadFile(attachment)
-    }
-    
-    notifications.success('All receipts downloaded successfully', {
-      title: 'Success'
-    })
-  } catch (error: any) {
-    notifications.error('Failed to download receipts', {
-      title: 'Error'
-    })
+  for (const attachment of payment.value.receipt_attachments) {
+    await paymentStore.downloadFile(attachment)
   }
-}
-
-const viewFile = async (filepath: string) => {
-  try {
-    const response = await axios.get(`/payments/view-file?path=${encodeURIComponent(filepath)}`, {
-      responseType: 'blob'
-    })
-    
-    // Create blob URL and open in new tab
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    window.open(url, '_blank')
-    window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    notifications.error('Failed to view file', {
-      title: 'Error'
-    })
-  }
-}
-
-const downloadFile = async (filepath: string) => {
-  try {
-    const response = await axios.get(`/payments/download-file?path=${encodeURIComponent(filepath)}`, {
-      responseType: 'blob'
-    })
-    
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', getFileName(filepath))
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    notifications.error('Failed to download file', {
-      title: 'Error'
-    })
-  }
+  notifications.success('All receipts downloaded successfully', { title: 'Success' })
 }
 
 const confirmDelete = () => {
@@ -683,25 +533,15 @@ const confirmDelete = () => {
 const deletePayment = async () => {
   if (!payment.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/payments/${payment.value.id}`)
-    notifications.success('Payment deleted successfully', {
-      title: 'Success'
-    })
+  const success = await paymentStore.deletePayment(payment.value.id)
+  if (success) {
     router.push('/payments')
-  } catch (error: any) {
-    notifications.error('Failed to delete payment', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
-    showDeleteModal.value = false
+  } else {
+    notifications.error('Failed to delete payment', { title: 'Error' })
   }
+  showDeleteModal.value = false
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchPayment()
-})
+onMounted(() => loadPayment())
 </script>

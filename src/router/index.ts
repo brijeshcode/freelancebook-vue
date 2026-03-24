@@ -173,6 +173,14 @@ const router = createRouter({
           }
         },
         {
+          path: 'invoices/:id/print',
+          name: 'InvoicePrint',
+          component: () => import('@/views/invoices/Print.vue'),
+          meta: {
+            title: 'Print Invoice'
+          }
+        },
+        {
           path: 'payments',
           name: 'Payments',
           component: () => import('@/views/payments/Index.vue'),

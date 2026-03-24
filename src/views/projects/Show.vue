@@ -380,10 +380,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useProjectStore } from '@/stores/ProjectStore'
 import {
   ArrowLeft,
   Folder,
@@ -402,44 +402,12 @@ import {
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const projectStore = useProjectStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
+// Bind store state
+const loading = computed(() => projectStore.loading)
+const project = computed(() => projectStore.currentProject)
 
-interface Project {
-  id: number
-  name: string
-  budget: number | null
-  budget_currency: string
-  notes: string | null
-  project_details: string | null
-  start_date: string | null
-  end_date: string | null
-  deadline: string | null
-  estimated_hours: number | null
-  actual_hours: number
-  total_paid: number
-  payment_currency: string
-  status: 'prospective' | 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled'
-  budget_exceeded: boolean
-  remaining_budget: number | null
-  time_variance: number | null
-  client: Client | null
-  freelancer: {
-    id: number
-    name: string
-  }
-  created_at: string
-  updated_at: string
-}
-
-// State
-const loading = ref(true)
-const project = ref<Project | null>(null)
 const activeTab = ref('details')
 
 // Tabs configuration
@@ -451,28 +419,10 @@ const tabs = [
 
 // Methods
 const fetchProject = async () => {
-  loading.value = true
-  try {
-    const response = await axios.get(`/projects/${route.params.id}`)
-    project.value = response.data.data
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Project not found', {
-        title: 'Error'
-      })
-      router.push('/projects')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to view this project', {
-        title: 'Access Denied'
-      })
-      router.push('/projects')
-    } else {
-      notifications.error('Failed to load project details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  await projectStore.fetchProject(Number(route.params.id))
+  if (!project.value) {
+    notifications.error('Project not found', { title: 'Error' })
+    router.push('/projects')
   }
 }
 
@@ -568,7 +518,6 @@ const trackTime = () => {
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchProject()
-})
+onMounted(() => fetchProject())
+onUnmounted(() => projectStore.clearCurrentProject())
 </script>

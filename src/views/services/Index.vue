@@ -21,7 +21,7 @@
 
     <!-- Filters & Search -->
     <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
         <!-- Search -->
         <div class="md:col-span-2">
           <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -38,6 +38,24 @@
             />
             <Search class="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
           </div>
+        </div>
+
+        <!-- Client Filter -->
+        <div>
+          <label for="client" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Client
+          </label>
+          <select
+            id="client"
+            v-model="filters.client_id"
+            class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
+            @change="fetchServices"
+          >
+            <option value="">All Clients</option>
+            <option v-for="client in clients" :key="client.id" :value="client.id">
+              {{ client.name }}
+            </option>
+          </select>
         </div>
 
         <!-- Status Filter -->
@@ -188,10 +206,10 @@
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm">
                   <div class="text-gray-900 dark:text-white">
-                    {{ service.currency }} {{ formatCurrency(service.base_amount) }}
+                    {{ service.currency.symbol }} {{ formatCurrency(service.base_amount) }}
                   </div>
                   <div v-if="service.has_tax" class="text-gray-500 dark:text-gray-400">
-                    Total: {{ service.currency }} {{ formatCurrency(service.total_amount) }}
+                    Total: {{ service.currency.symbol }} {{ formatCurrency(service.total_amount) }}
                   </div>
                 </div>
               </td>
@@ -378,9 +396,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { ref, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useFreelanceServiceStore } from '@/stores/FreelanceServiceStore'
+import { useListDataStore } from '@/stores/ListDataStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   Plus,
@@ -396,119 +415,31 @@ import {
   ChevronRight,
   AlertTriangle
 } from 'lucide-vue-next'
+import type { FreelanceService } from '@/services/System/FreelanceServiceService'
 
-const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-}
+const serviceStore = useFreelanceServiceStore()
+const listDataStore = useListDataStore()
+const { services, pagination, loading, deleting, filters } = storeToRefs(serviceStore)
+const { clients } = storeToRefs(listDataStore)
 
-interface Project {
-  id: number
-  name: string
-}
-
-interface Service {
-  id: number
-  client_id: number
-  project_id: number | null
-  title: string
-  description: string | null
-  amount: number
-  currency: string
-  has_tax: boolean
-  tax_name: string | null
-  tax_rate: number
-  tax_type: 'inclusive' | 'exclusive'
-  frequency: 'one-time' | 'weekly' | 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
-  start_date: string
-  next_billing_date: string | null
-  end_date: string | null
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled' | 'pending_approval'
-  is_active: boolean
-  billing_count: number
-  last_billed_at: string | null
-  tags: string[] | null
-  notes: string | null
-  base_amount: number
-  tax_amount: number
-  total_amount: number
-  client: Client | null
-  project: Project | null
-  created_at: string
-  updated_at: string
-}
-
-interface Pagination {
-  current_page: number
-  per_page: number
-  total: number
-  last_page: number
-  from: number
-  to: number
-  has_more_pages: boolean
-  next_page_url: string | null
-  prev_page_url: string | null
-  first_page_url: string
-  last_page_url: string
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const services = ref<Service[]>([])
-const pagination = ref<Pagination | null>(null)
+// Local UI state
 const showDeleteModal = ref(false)
-const serviceToDelete = ref<Service | null>(null)
+const serviceToDelete = ref<FreelanceService | null>(null)
 const searchTimeout = ref<number | null>(null)
 
-const filters = reactive({
-  search: '',
-  status: '',
-  frequency: '',
-  per_page: 15
-})
-
 // Methods
-const fetchServices = async (page = 1) => {
-  loading.value = true
-  try {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: filters.per_page.toString()
-    })
-
-    if (filters.search) params.append('search', filters.search)
-    if (filters.status) params.append('status', filters.status)
-    if (filters.frequency) params.append('frequency', filters.frequency)
-
-    const response = await axios.get(`/services?${params}`)
-    services.value = response.data.data
-    pagination.value = response.data.pagination
-  } catch (error: any) {
-    notifications.error('Failed to load services', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
+const fetchServices = () => serviceStore.fetchServices(1)
 
 const debounceSearch = () => {
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
-  }
-  searchTimeout.value = setTimeout(() => {
-    fetchServices(1)
-  }, 300)
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => serviceStore.fetchServices(1), 300)
 }
 
 const changePage = (page: number) => {
   if (page >= 1 && pagination.value && page <= pagination.value.last_page) {
-    fetchServices(page)
+    serviceStore.fetchServices(page)
   }
 }
 
@@ -551,28 +482,19 @@ const getStatusLabel = (status: string): string => {
   return labels[status as keyof typeof labels] || status
 }
 
-const toggleStatus = async (service: Service) => {
-  try {
-    const response = await axios.patch(`/services/${service.id}/toggle-status`)
-    
-    // Update the service in the list
-    const index = services.value.findIndex(s => s.id === service.id)
-    if (index !== -1) {
-      services.value[index] = response.data.data
-    }
-    
+const toggleStatus = async (service: FreelanceService) => {
+  const updated = await serviceStore.toggleStatus(service.id)
+  if (updated) {
     notifications.success(
-      `Service ${response.data.data.is_active ? 'activated' : 'deactivated'} successfully`,
+      `Service ${updated.is_active ? 'activated' : 'deactivated'} successfully`,
       { title: 'Success' }
     )
-  } catch (error: any) {
-    notifications.error('Failed to toggle service status', {
-      title: 'Error'
-    })
+  } else {
+    notifications.error('Failed to toggle service status', { title: 'Error' })
   }
 }
 
-const confirmDelete = (service: Service) => {
+const confirmDelete = (service: FreelanceService) => {
   serviceToDelete.value = service
   showDeleteModal.value = true
 }
@@ -580,26 +502,19 @@ const confirmDelete = (service: Service) => {
 const deleteService = async () => {
   if (!serviceToDelete.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/services/${serviceToDelete.value.id}`)
-    notifications.success('Service deleted successfully', {
-      title: 'Success'
-    })
+  const success = await serviceStore.deleteService(serviceToDelete.value.id)
+  if (success) {
+    notifications.success('Service deleted successfully', { title: 'Success' })
     showDeleteModal.value = false
     serviceToDelete.value = null
-    await fetchServices(pagination.value?.current_page || 1)
-  } catch (error: any) {
-    notifications.error('Failed to delete service', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
+  } else {
+    notifications.error('Failed to delete service', { title: 'Error' })
   }
 }
 
 // Lifecycle
 onMounted(() => {
-  fetchServices()
+  serviceStore.fetchServices()
+  listDataStore.getClients()
 })
 </script>

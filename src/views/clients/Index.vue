@@ -49,7 +49,7 @@
             id="status"
             v-model="filters.status"
             class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-            @change="fetchClients"
+            @change="fetchClients(1)"
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
@@ -67,7 +67,7 @@
             id="per-page"
             v-model="filters.per_page"
             class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-            @change="fetchClients"
+            @change="fetchClients(1)"
           >
             <option value="15">15</option>
             <option value="25">25</option>
@@ -326,10 +326,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useClientStore } from '@/stores/ClientStore'
+import type { Client } from '@/services/System/ClientService'
 import {
   Plus,
   Search,
@@ -348,95 +349,26 @@ import {
 
 const router = useRouter()
 const notifications = useNotifications()
+const clientStore = useClientStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  type: 'individual' | 'company'
-  contact_person: string | null
-  client_code: string
-  email: string | null
-  phone: string | null
-  website: string | null
-  address: string | null
-  city: string | null
-  state: string | null
-  country: string | null
-  postal_code: string | null
-  tax_number: string | null
-  notes: string | null
-  status: 'active' | 'inactive' | 'archived'
-  billing_preferences: any
-  financial: {
-    total_billed: number
-    total_received: number
-    current_balance: number
-  }
-  created_at: string
-  updated_at: string
-}
+// Bind store state
+const loading = computed(() => clientStore.loading)
+const deleting = computed(() => clientStore.deleting)
+const clients = computed(() => clientStore.clients)
+const pagination = computed(() => clientStore.pagination)
+const filters = clientStore.filters
 
-interface Pagination {
-  current_page: number
-  per_page: number
-  total: number
-  last_page: number
-  from: number
-  to: number
-  has_more_pages: boolean
-  next_page_url: string | null
-  prev_page_url: string | null
-  first_page_url: string
-  last_page_url: string
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const clients = ref<Client[]>([])
-const pagination = ref<Pagination | null>(null)
+// Local UI state
 const showDeleteModal = ref(false)
 const clientToDelete = ref<Client | null>(null)
 const searchTimeout = ref<number | null>(null)
 
-const filters = reactive({
-  search: '',
-  status: '',
-  per_page: 15
-})
-
 // Methods
-const fetchClients = async (page = 1) => {
-  loading.value = true
-  try {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: filters.per_page.toString()
-    })
-
-    if (filters.search) params.append('search', filters.search)
-    if (filters.status) params.append('status', filters.status)
-
-    const response = await axios.get(`/clients?${params}`)
-    clients.value = response.data.data
-    pagination.value = response.data.pagination
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
+const fetchClients = (page = 1) => clientStore.fetchClients(page)
 
 const debounceSearch = () => {
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
-  }
-  searchTimeout.value = setTimeout(() => {
-    fetchClients(1)
-  }, 300)
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => fetchClients(1), 300)
 }
 
 const changePage = (page: number) => {
@@ -462,11 +394,7 @@ const getStatusClass = (status: string): string => {
 }
 
 const addProject = (client: Client) => {
-  // Navigate to project creation with client pre-selected
-  router.push({
-    path: '/projects/create',
-    query: { client_id: client.id.toString() }
-  })
+  router.push({ path: '/projects/create', query: { client_id: client.id.toString() } })
 }
 
 const confirmDelete = (client: Client) => {
@@ -477,26 +405,18 @@ const confirmDelete = (client: Client) => {
 const deleteClient = async () => {
   if (!clientToDelete.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/clients/${clientToDelete.value.id}`)
-    notifications.success('Client deleted successfully', {
-      title: 'Success'
-    })
+  const success = await clientStore.deleteClient(clientToDelete.value.id)
+
+  if (success) {
+    notifications.success('Client deleted successfully', { title: 'Success' })
     showDeleteModal.value = false
     clientToDelete.value = null
     await fetchClients(pagination.value?.current_page || 1)
-  } catch (error: any) {
-    notifications.error('Failed to delete client', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
+  } else {
+    notifications.error('Failed to delete client', { title: 'Error' })
   }
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchClients()
-})
+onMounted(() => fetchClients())
 </script>

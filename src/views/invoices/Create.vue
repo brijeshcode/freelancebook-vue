@@ -28,10 +28,10 @@
             Invoice Details
           </h3>
           
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Client Selection -->
             <div>
-              <label for="client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label for="client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Client <span class="text-red-500">*</span>
               </label>
               <select
@@ -39,11 +39,11 @@
                 v-model="form.client_id"
                 :class="[
                   'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                  errors.client_id 
-                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
+                  errors.client_id
+                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 ]"
-                @change="onClientChange"
+                @change="() => onClientChange()"
               >
                 <option value="">Select a client</option>
                 <option v-for="client in clients" :key="client.id" :value="client.id">
@@ -57,8 +57,8 @@
 
             <!-- Project Selection -->
             <div>
-              <label for="project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Project (Optional)
+              <label for="project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Project
               </label>
               <select
                 id="project_id"
@@ -73,9 +73,34 @@
               </select>
             </div>
 
+            <!-- Currency -->
+            <div>
+              <label for="currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Currency <span class="text-red-500">*</span>
+              </label>
+              <select
+                id="currency"
+                v-model="form.currency_id"
+                :class="[
+                  'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
+                  errors.currency_id
+                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-300 dark:border-gray-600'
+                ]"
+              >
+                <option value="">Select currency</option>
+                <option v-for="c in currencies" :key="c.id" :value="c.id">
+                  {{ c.code }} - {{ c.name }}
+                </option>
+              </select>
+              <p v-if="errors.currency_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ errors.currency_id[0] }}
+              </p>
+            </div>
+
             <!-- Invoice Date -->
             <div>
-              <label for="invoice_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label for="invoice_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Invoice Date <span class="text-red-500">*</span>
               </label>
               <input
@@ -84,8 +109,8 @@
                 type="date"
                 :class="[
                   'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                  errors.invoice_date 
-                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
+                  errors.invoice_date
+                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 ]"
               />
@@ -96,8 +121,8 @@
 
             <!-- Due Date -->
             <div>
-              <label for="due_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Due Date (Optional)
+              <label for="due_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Due Date
               </label>
               <input
                 id="due_date"
@@ -108,37 +133,22 @@
               />
             </div>
 
-            <!-- Currency -->
+            <!-- Billing Month -->
             <div>
-              <label for="currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Currency <span class="text-red-500">*</span>
+              <label for="billing_month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Billing Month <span class="text-red-500">*</span>
               </label>
-              <select
-                id="currency"
-                v-model="form.currency"
-                :class="[
-                  'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                  errors.currency 
-                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 dark:border-gray-600'
-                ]"
-              >
-                <option value="">Select currency</option>
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="INR">INR - Indian Rupee</option>
-                <option value="CAD">CAD - Canadian Dollar</option>
-                <option value="AUD">AUD - Australian Dollar</option>
-              </select>
-              <p v-if="errors.currency" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ errors.currency[0] }}
-              </p>
+              <input
+                id="billing_month"
+                v-model="form.billing_month"
+                type="month"
+                class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
+              />
             </div>
 
             <!-- Exchange Rate -->
             <div>
-              <label for="exchange_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label for="exchange_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Exchange Rate <span class="text-red-500">*</span>
               </label>
               <input
@@ -150,33 +160,30 @@
                 max="9999.999999"
                 :class="[
                   'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                  errors.exchange_rate 
-                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
+                  errors.exchange_rate
+                    ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 ]"
                 placeholder="1.000000"
               />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Rate to convert to your base currency
-              </p>
               <p v-if="errors.exchange_rate" class="mt-1 text-sm text-red-600 dark:text-red-400">
                 {{ errors.exchange_rate[0] }}
               </p>
             </div>
-          </div>
 
-          <!-- Notes -->
-          <div class="mt-6">
-            <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Notes (Optional)
-            </label>
-            <textarea
-              id="notes"
-              v-model="form.notes"
-              rows="3"
-              class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-              placeholder="Additional notes for this invoice..."
-            ></textarea>
+            <!-- Notes -->
+            <div class="sm:col-span-2">
+              <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Notes
+              </label>
+              <textarea
+                id="notes"
+                v-model="form.notes"
+                rows="2"
+                class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
+                placeholder="Additional notes for this invoice..."
+              ></textarea>
+            </div>
           </div>
         </div>
       </div>
@@ -225,12 +232,23 @@
       </div>
 
       <!-- Invoice Items Card -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+      <div v-if="form.client_id" class="bg-white dark:bg-gray-800 shadow rounded-lg">
         <div class="px-4 py-5 sm:p-6">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-              Invoice Items
-            </h3>
+            <div class="flex items-center gap-3">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                Invoice Items
+              </h3>
+              <label class="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  v-model="showMoreDetails"
+                  @change="toggleAllMoreDetails"
+                  class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                />
+                toggle More details
+              </label>
+            </div>
             <button
               type="button"
               @click="addItem"
@@ -259,156 +277,165 @@
             </div>
           </div>
 
-          <div v-else class="space-y-4">
-            <div
-              v-for="(item, index) in form.items"
-              :key="index"
-              class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-            >
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">
-                  Item {{ index + 1 }}
-                </h4>
-                <button
-                  type="button"
-                  @click="removeItem(index)"
-                  class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 transition-colors duration-200"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- Service Selection -->
-                <div class="lg:col-span-2">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Service (Optional)
-                  </label>
-                  <select
-                    v-model="item.service_id"
-                    :disabled="!form.client_id || clientServices.length === 0"
-                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    @change="onServiceSelect(index, item.service_id)"
-                  >
-                    <option value="">Select a service</option>
-                    <option v-for="service in clientServices" :key="service.id" :value="service.id">
-                      {{ service.title }} ({{ service.currency }} {{ formatCurrency(service.total_amount) }})
-                    </option>
-                  </select>
-                </div>
-
-                <!-- Quantity -->
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Quantity <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    v-model="item.quantity"
-                    type="number"
-                    min="1"
-                    :class="[
-                      'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                      errors[`items.${index}.quantity`] 
-                        ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    ]"
-                    @input="calculateTotals"
-                  />
-                  <p v-if="errors[`items.${index}.quantity`]" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                    {{ errors[`items.${index}.quantity`][0] }}
-                  </p>
-                </div>
-
-                <!-- Unit Price -->
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Unit Price <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    v-model="item.unit_price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    :class="[
-                      'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                      errors[`items.${index}.unit_price`] 
-                        ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    ]"
-                    @input="calculateTotals"
-                  />
-                  <p v-if="errors[`items.${index}.unit_price`]" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                    {{ errors[`items.${index}.unit_price`][0] }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Description -->
-              <div class="mt-4">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Description <span class="text-red-500">*</span>
-                </label>
-                <input
-                  v-model="item.description"
-                  type="text"
-                  :class="[
-                    'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
-                    errors[`items.${index}.description`] 
-                      ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500' 
-                      : 'border-gray-300 dark:border-gray-600'
-                  ]"
-                  placeholder="Description of the service or product"
-                />
-                <p v-if="errors[`items.${index}.description`]" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                  {{ errors[`items.${index}.description`][0] }}
-                </p>
-              </div>
-
-              <!-- Service Period (Optional) -->
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Service Period Start
-                  </label>
-                  <input
-                    v-model="item.service_period_start"
-                    type="date"
-                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Service Period End
-                  </label>
-                  <input
-                    v-model="item.service_period_end"
-                    type="date"
-                    :min="item.service_period_start"
-                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-                  />
-                </div>
-              </div>
-
-              <!-- Notes -->
-              <div class="mt-4">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Item Notes
-                </label>
-                <textarea
-                  v-model="item.notes"
-                  rows="2"
-                  class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-                  placeholder="Additional notes for this item"
-                ></textarea>
-              </div>
-
-              <!-- Item Total -->
-              <div class="mt-4 text-right">
-                <span class="text-sm font-medium text-gray-900 dark:text-white">
-                  Item Total: {{ form.currency }} {{ formatCurrency(item.quantity * item.unit_price) }}
-                </span>
-              </div>
-            </div>
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="pb-2 pr-2 w-6">#</th>
+                  <th class="pb-2 pr-2 w-28">Mode</th>
+                  <th class="pb-2 pr-2">Service / Title</th>
+                  <th class="pb-2 pr-2 w-20">Qty</th>
+                  <th class="pb-2 pr-2 w-28">Unit Price</th>
+                  <th class="pb-2 pr-2 w-36 text-right">Total</th>
+                  <th class="pb-2 w-12"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <template v-for="(item, index) in form.items" :key="index">
+                  <tr class="align-middle">
+                    <td class="py-2 pr-2 text-gray-500 dark:text-gray-400">{{ index + 1 }}</td>
+                    <td class="py-2 pr-2">
+                      <div class="inline-flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden text-xs font-medium">
+                        <button
+                          type="button"
+                          @click="setItemMode(index, 'service')"
+                          :class="item._mode === 'service' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'"
+                          class="px-2 py-1 transition-colors"
+                        >Svc</button>
+                        <button
+                          type="button"
+                          @click="setItemMode(index, 'direct')"
+                          :class="item._mode === 'direct' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'"
+                          class="px-2 py-1 transition-colors border-l border-gray-300 dark:border-gray-600"
+                        >Direct</button>
+                      </div>
+                    </td>
+                    <td class="py-2 pr-2">
+                      <select
+                        v-if="item._mode === 'service'"
+                        v-model="item.service_id"
+                        :disabled="!form.client_id || clientServices.length === 0"
+                        class="block w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        @change="onServiceSelect(index, item.service_id)"
+                      >
+                        <option value="">Select a service</option>
+                        <option v-for="service in clientServices" :key="service.id" :value="service.id">
+                          {{ service.title }}
+                        </option>
+                      </select>
+                      <div v-else>
+                        <input
+                          v-model="item.title"
+                          type="text"
+                          :class="[
+                            'block w-full px-2 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors',
+                            errors[`items.${index}.title`] ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                          ]"
+                          placeholder="Item title"
+                        />
+                        <p v-if="errors[`items.${index}.title`]" class="mt-0.5 text-xs text-red-600 dark:text-red-400">
+                          {{ errors[`items.${index}.title`][0] }}
+                        </p>
+                      </div>
+                    </td>
+                    <td class="py-2 pr-2">
+                      <input
+                        v-model="item.quantity"
+                        type="number"
+                        min="1"
+                        :class="[
+                          'block w-full px-2 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors',
+                          errors[`items.${index}.quantity`] ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                        ]"
+                        @input="calculateTotals"
+                      />
+                    </td>
+                    <td class="py-2 pr-2">
+                      <input
+                        v-model="item.unit_price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        :class="[
+                          'block w-full px-2 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors',
+                          errors[`items.${index}.unit_price`] ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                        ]"
+                        @input="calculateTotals"
+                      />
+                    </td>
+                    <td class="py-2 pr-2">
+                      <div class="px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 font-medium text-gray-900 dark:text-white text-right whitespace-nowrap">
+                        {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(item.quantity * item.unit_price) }}
+                      </div>
+                    </td>
+                    <td class="py-2">
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          @click="item._showMore = !item._showMore"
+                          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                          :title="item._showMore ? 'Hide details' : 'Show details'"
+                        >
+                          <ChevronDown v-if="!item._showMore" class="h-4 w-4" />
+                          <ChevronUp v-else class="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          @click="removeItem(index)"
+                          class="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                        >
+                          <Trash2 class="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- More details row -->
+                  <tr v-if="item._showMore">
+                    <td colspan="7" class="pb-3 pt-0">
+                      <div class="space-y-2 bg-gray-50 dark:bg-gray-900/50 rounded-md p-3 border border-gray-100 dark:border-gray-700">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                          <input
+                            v-model="item.description"
+                            type="text"
+                            class="block w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors"
+                            placeholder="Optional description"
+                          />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                          <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Period Start</label>
+                            <input
+                              v-model="item.service_period_start"
+                              type="date"
+                              class="block w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors"
+                            />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Period End</label>
+                            <input
+                              v-model="item.service_period_end"
+                              type="date"
+                              :min="item.service_period_start"
+                              class="block w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                          <textarea
+                            v-model="item.notes"
+                            rows="2"
+                            class="block w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm transition-colors"
+                            placeholder="Additional notes for this item"
+                          ></textarea>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
 
           <p v-if="errors.items" class="mt-2 text-sm text-red-600 dark:text-red-400">
@@ -428,7 +455,7 @@
             <div class="flex justify-between">
               <span class="text-sm text-gray-500 dark:text-gray-400">Subtotal:</span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ form.currency }} {{ formatCurrency(subtotal) }}
+                {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(subtotal) }}
               </span>
             </div>
             
@@ -437,7 +464,7 @@
                 {{ form.tax_label || 'Tax' }} ({{ form.tax_rate }}%):
               </span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ form.currency }} {{ formatCurrency(taxAmount) }}
+                {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(taxAmount) }}
               </span>
             </div>
             
@@ -445,13 +472,16 @@
               <div class="flex justify-between">
                 <span class="text-base font-medium text-gray-900 dark:text-white">Total:</span>
                 <span class="text-base font-medium text-gray-900 dark:text-white">
-                  {{ form.currency }} {{ formatCurrency(total) }}
+                  {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(total) }}
                 </span>
               </div>
             </div>
 
-            <div v-if="form.exchange_rate !== 1" class="text-sm text-gray-500 dark:text-gray-400">
-              Base Currency: {{ formatCurrency(total * form.exchange_rate) }}
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-3 flex justify-between">
+              <span class="text-sm text-gray-500 dark:text-gray-400">Base Currency Total:</span>
+              <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ formatCurrency(totalBaseCurrency) }}
+              </span>
             </div>
           </div>
         </div>
@@ -480,60 +510,53 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { useInvoiceStore } from '@/stores/InvoiceStore'
+import { useClientStore } from '@/stores/ClientStore'
+import { useListDataStore } from '@/stores/ListDataStore'
+import { get } from '@/services/axios'
+import type { InvoiceProject } from '@/Types/Invoice'
 import { useNotifications } from '@/composables/useNotifications'
+import { useFetchActiveSystem } from '@/services/System/FetchActiveService'
 import {
   ArrowLeft,
   Plus,
   Package,
   Trash2,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const invoiceStore = useInvoiceStore()
+const clientStore = useClientStore()
+const listDataStore = useListDataStore()
 
-interface Project {
-  id: number
-  name: string
-  client_id: number
-}
+// Alias saving → loading to keep template unchanged
+const { saving: loading, errors } = storeToRefs(invoiceStore)
+const { clients } = storeToRefs(clientStore)
+const { currencies, services: allServices } = storeToRefs(listDataStore)
 
-interface Service {
-  id: number
-  title: string
-  currency: string
-  total_amount: number
-  client_id: number
-  project_id: number | null
-}
+const { activeSystemList, activeSystems } = useFetchActiveSystem()
 
-interface InvoiceItem {
-  service_id: string
-  description: string
-  quantity: number
-  unit_price: number
-  service_period_start: string
-  service_period_end: string
-  notes: string
-}
+const SPECIAL_CLIENT_ID = Number(import.meta.env.VITE_SPECIAL_CLIENT_ID)
 
-// State
-const loading = ref(false)
-const clients = ref<Client[]>([])
-const clientProjects = ref<Project[]>([])
-const clientServices = ref<Service[]>([])
-const errors = ref<Record<string, string[]>>({})
+// Local state
+const clientProjects = ref<InvoiceProject[]>([])
+const showMoreDetails = ref(false)
+
+const isSpecialClient = computed(() => Number(form.client_id) === SPECIAL_CLIENT_ID)
+
+// Services for the selected client (filtered from already-loaded allServices)
+const clientServices = computed(() =>
+  allServices.value.filter(s => s.client_id === Number(form.client_id))
+)
 
 const form = reactive({
   client_id: '',
@@ -541,93 +564,192 @@ const form = reactive({
   invoice_date: new Date().toISOString().split('T')[0],
   due_date: '',
   notes: '',
-  currency: 'USD',
+  currency_id: '' as string | number,
+  calculation_type: 'multiply' as 'multiply' | 'divide',
   exchange_rate: 1.000000,
   tax_rate: 0,
   tax_label: '',
-  items: [] as InvoiceItem[]
+  billing_month: new Date().toISOString().slice(0, 7),
+  items: [] as Array<{
+    _mode: 'service' | 'direct'
+    _showMore: boolean
+    service_id: string
+    title: string
+    description: string | null
+    quantity: number
+    unit_price: number
+    service_period_start: string
+    service_period_end: string
+    notes: string
+  }>
 })
 
 // Computed
-const subtotal = computed(() => {
-  return form.items.reduce((total, item) => {
-    return total + (item.quantity * item.unit_price)
-  }, 0)
-})
+const subtotal = computed(() =>
+  form.items.reduce((total, item) => total + item.quantity * item.unit_price, 0)
+)
 
-const taxAmount = computed(() => {
-  return subtotal.value * (form.tax_rate / 100)
-})
+const taxAmount = computed(() => subtotal.value * (form.tax_rate / 100))
 
-const total = computed(() => {
-  return subtotal.value + taxAmount.value
-})
+const total = computed(() => subtotal.value + taxAmount.value)
+
+const totalBaseCurrency = computed(() =>
+  form.calculation_type === 'divide'
+    ? (form.exchange_rate ? total.value / form.exchange_rate : 0)
+    : total.value * form.exchange_rate
+)
+
+const selectedCurrency = computed(() =>
+  currencies.value.find(c => c.id === Number(form.currency_id)) ?? null
+)
 
 // Methods
-const fetchClients = async () => {
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
+const onClientChange = async (autoPopulate = true) => {
+  form.project_id = ''
+  form.items = []
+  clientProjects.value = []
+
+  if (form.client_id) {
+    await fetchClientProjects()
+    if (autoPopulate) {
+      if (isSpecialClient.value) {
+        await populateFromActiveSystems()
+      } else {
+        autoPopulateItems()
+      }
+    }
   }
 }
 
-const onClientChange = async () => {
-  form.project_id = ''
-  clientProjects.value = []
-  clientServices.value = []
-  
-  if (form.client_id) {
-    await Promise.all([
-      fetchClientProjects(),
-      fetchClientServices()
-    ])
-  }
+const populateFromActiveSystems = async () => {
+  if (!form.billing_month) return
+
+  const [year, month] = form.billing_month.split('-').map(Number)
+  const daysInMonth = 30
+  const mm = String(month).padStart(2, '0')
+  const dd = String(new Date(year, month, 0).getDate()).padStart(2, '0')
+
+  await activeSystems(month, year)
+
+  const maintenanceServices = clientServices.value.filter(s => s.tags?.includes('maintenance'))
+  const fixedServices = clientServices.value.filter(s => {
+    if (!s.tags?.includes('fixed')) return false
+    if (!s.next_billing_date) return false
+    const d = new Date(s.next_billing_date)
+    return d.getFullYear() === year && d.getMonth() + 1 === month
+  })
+
+  // Fixed-price services (hosting, domain, email, etc.) — include directly
+  const otherItems = fixedServices.map(service => ({
+    _mode: 'service' as const,
+    _showMore: false,
+    service_id: String(service.id),
+    title: service.title,
+    description: service.description,
+    quantity: 1,
+    unit_price: Number(service.amount),
+    service_period_start: `${year}-${mm}-01`,
+    service_period_end: `${year}-${mm}-${dd}`,
+    notes: '',
+  }))
+
+  // Maintenance services — match against active systems API and apply billing rule
+  const maintenanceItems = activeSystemList.value
+    .filter(system => system.invoices > 0)
+    .map(system => {
+      const service = maintenanceServices.find(s => s.metadata?.link === system.url)
+      if (!service) return null
+
+      const isFullMonth = system.invoices > 15
+      const unitPrice = isFullMonth
+        ? Number(service.amount)
+        : Math.ceil(Number(service.amount) / daysInMonth)
+      const quantity = isFullMonth ? 1 : system.invoices
+
+      return {
+        _mode: 'service' as const,
+        _showMore: false,
+        service_id: String(service.id),
+        title: service.title,
+        description: service.description,
+        quantity,
+        unit_price: unitPrice,
+        service_period_start: `${year}-${mm}-01`,
+        service_period_end: `${year}-${mm}-${dd}`,
+        notes: `Invoices: ${system.invoices} | Expenses: ${system.expenses}`,
+      }
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+
+  form.items = [...otherItems, ...maintenanceItems]
 }
+
+watch(() => form.billing_month, async (newVal) => {
+  if (!isSpecialClient.value || !newVal) return
+  await populateFromActiveSystems()
+})
 
 const fetchClientProjects = async () => {
   try {
-    const response = await axios.get(`/projects?client_id=${form.client_id}`)
-    clientProjects.value = response.data.data
-  } catch (error: any) {
+    const response = await get<InvoiceProject[]>(`/projects?client_id=${form.client_id}`)
+    clientProjects.value = response.data.data ?? []
+  } catch (error) {
     console.error('Failed to load client projects:', error)
   }
 }
 
-const fetchClientServices = async () => {
-  try {
-    const response = await axios.get(`/services?client_id=${form.client_id}`)
-    clientServices.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load client services:', error)
+const autoPopulateItems = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const monthStart = new Date(year, month, 1).toISOString().split('T')[0]
+  const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0]
+
+  const dueThisMonth = clientServices.value.filter(s => {
+    if (!s.next_billing_date) return false
+    const d = new Date(s.next_billing_date)
+    return d.getFullYear() === year && d.getMonth() === month
+  })
+
+  form.items = dueThisMonth.map(service => ({
+    _mode: 'service' as const,
+    _showMore: false,
+    service_id: String(service.id),
+    title: service.title,
+    description: null,
+    quantity: 1,
+    unit_price: service.amount,
+    service_period_start: monthStart,
+    service_period_end: monthEnd,
+    notes: '',
+  }))
+}
+
+const onServiceSelect = (index: number, serviceId: string) => {
+  if (!serviceId) return
+
+  const service = clientServices.value.find(s => s.id === parseInt(serviceId))
+  if (service) {
+    form.items[index].title = service.title
+    // form.items[index].unit_price = service.total_amount
+    form.items[index].unit_price = service.amount
+    form.items[index].quantity = 1
+
+    // currency_id is set by the user via the currency dropdown
   }
 }
 
-const onServiceSelect = async (index: number, serviceId: string) => {
-  if (!serviceId) return
-  
-  const service = clientServices.value.find(s => s.id === parseInt(serviceId))
-  if (service) {
-    form.items[index].description = service.title
-    form.items[index].unit_price = service.total_amount
-    form.items[index].quantity = 1
-    
-    // Set currency if not already set
-    if (!form.currency) {
-      form.currency = service.currency
-    }
-    
-    calculateTotals()
-  }
+const toggleAllMoreDetails = () => {
+  form.items.forEach(item => { item._showMore = showMoreDetails.value })
 }
 
 const addItem = () => {
   form.items.push({
+    _mode: 'service',
+    _showMore: false,
     service_id: '',
-    description: '',
+    title: '',
+    description: null,
     quantity: 1,
     unit_price: 0,
     service_period_start: '',
@@ -636,103 +758,91 @@ const addItem = () => {
   })
 }
 
+const setItemMode = (index: number, mode: 'service' | 'direct') => {
+  form.items[index]._mode = mode
+  form.items[index].service_id = ''
+  form.items[index].title = ''
+}
+
 const removeItem = (index: number) => {
   form.items.splice(index, 1)
-  calculateTotals()
 }
 
 const calculateTotals = () => {
-  // This is reactive, so the computed properties will update automatically
+  // Computed properties update automatically
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const createInvoice = async () => {
-  loading.value = true
-  errors.value = {}
-  
-  try {
-    const response = await axios.post('/invoices', form)
-    
-    notifications.success('Invoice created successfully', {
-      title: 'Success'
-    })
-    
-    router.push(`/invoices/${response.data.data.id}`)
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      errors.value = error.response.data.errors || {}
-      notifications.error('Please check the form for errors', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to create invoice', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  invoiceStore.clearErrors()
+
+  const invoice = await invoiceStore.createInvoice({
+    ...form,
+    billing_month: form.billing_month ? `${form.billing_month}-01` : null,
+    items: form.items.map(({ _mode, _showMore, ...item }) => ({
+      ...item,
+      unit_price_base_currency: null,
+    })),
+  })
+
+  if (invoice) {
+    router.push(`/invoices/${invoice.id}`)
+  } else if (Object.keys(errors.value).length > 0) {
+    notifications.error('Please check the form for errors', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to create invoice', { title: 'Error' })
   }
 }
 
 const loadInvoiceForCopy = async (invoiceId: string) => {
-  try {
-    const response = await axios.get(`/invoices/${invoiceId}`)
-    const invoice = response.data.data
-    
-    // Copy invoice data but reset certain fields
-    form.client_id = invoice.client_id
-    form.project_id = invoice.project_id
-    form.invoice_date = new Date().toISOString().split('T')[0]
-    form.due_date = ''
-    form.notes = invoice.notes
-    form.currency = invoice.currency
-    form.exchange_rate = invoice.exchange_rate
-    form.tax_rate = invoice.tax_rate
-    form.tax_label = invoice.tax_label
-    
-    // Copy items
-    form.items = invoice.items.map((item: any) => ({
-      service_id: item.service_id || '',
-      description: item.description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      service_period_start: '',
-      service_period_end: '',
-      notes: item.notes || ''
-    }))
-    
-    // Load client data
-    if (form.client_id) {
-      await onClientChange()
-    }
-    
-    notifications.success('Invoice copied successfully', {
-      title: 'Success'
-    })
-  } catch (error: any) {
-    notifications.error('Failed to copy invoice', {
-      title: 'Error'
-    })
+  await invoiceStore.fetchInvoice(Number(invoiceId))
+  const invoice = invoiceStore.currentInvoice
+
+  if (!invoice) {
+    notifications.error('Failed to copy invoice', { title: 'Error' })
+    return
   }
+
+  form.client_id = String(invoice.client_id)
+  form.project_id = invoice.project_id ? String(invoice.project_id) : ''
+  form.invoice_date = new Date().toISOString().split('T')[0]
+  form.due_date = ''
+  form.notes = invoice.notes ?? ''
+  form.currency_id = invoice.currency_id ?? ''
+  form.exchange_rate = invoice.exchange_rate
+  form.tax_rate = invoice.tax_rate
+  form.tax_label = invoice.tax_label ?? ''
+  form.billing_month = invoice.billing_month ? invoice.billing_month.slice(0, 7) : new Date().toISOString().slice(0, 7)
+
+  form.items = (invoice.items ?? []).map(item => ({
+    _mode: item.service_id ? 'service' : 'direct' as 'service' | 'direct',
+    _showMore: false,
+    service_id: item.service_id || '',
+    title: item.title || '',
+    description: item.description,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    service_period_start: '',
+    service_period_end: '',
+    notes: item.notes || ''
+  }))
+
+  if (form.client_id) await onClientChange(false)
+
+  notifications.success('Invoice copied successfully', { title: 'Success' })
 }
 
 // Lifecycle
 onMounted(async () => {
-  await fetchClients()
-  
-  // Add initial item
-  addItem()
-  
-  // Check if copying from existing invoice
+  await Promise.all([
+    clientStore.fetchClients(),
+    listDataStore.getCurrencies(),
+    listDataStore.getServices(),
+  ])
+
   const copyId = route.query.copy as string
-  if (copyId) {
-    await loadInvoiceForCopy(copyId)
-  }
+  if (copyId) await loadInvoiceForCopy(copyId)
 })
 </script>

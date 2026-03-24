@@ -57,9 +57,17 @@
             Download PDF
           </button>
 
+          <!-- Print Preview -->
+          <router-link
+            :to="`/invoices/${invoice.id}/print`"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 transition-colors duration-200"
+          >
+            <Printer class="h-5 w-5 mr-2" />
+            Print
+          </router-link>
+
           <!-- Edit -->
           <router-link
-            v-if="['draft', 'sent'].includes(invoice.status)"
             :to="`/invoices/${invoice.id}/edit`"
             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 transition-colors duration-200"
           >
@@ -141,6 +149,13 @@
             </h3>
             
             <div class="space-y-3">
+              <div v-if="invoice.billing_month" class="flex justify-between">
+                <span class="text-sm text-gray-500 dark:text-gray-400">Billing Month:</span>
+                <span class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ new Date(invoice.billing_month).toLocaleString('en-US', { month: 'long', year: 'numeric' }) }}
+                </span>
+              </div>
+
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Invoice Date:</span>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -165,14 +180,14 @@
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Currency:</span>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ invoice.currency }}
+                  {{ invoice.currency?.code ?? '' }} {{ invoice.currency?.symbol ? `(${invoice.currency.symbol})` : '' }}
                 </span>
               </div>
               
               <div v-if="invoice.exchange_rate !== 1" class="flex justify-between">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Exchange Rate:</span>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ invoice.exchange_rate }}
+                  {{ Number(invoice.exchange_rate).toFixed(2) }}
                 </span>
               </div>
 
@@ -246,10 +261,10 @@
                     {{ item.quantity }}
                   </td>
                   <td class="px-6 py-4 text-right text-sm text-gray-900 dark:text-white">
-                    {{ invoice.currency }} {{ formatCurrency(item.unit_price) }}
+                    {{ invoice.currency?.symbol ?? invoice.currency?.code ?? '' }} {{ formatCurrency(item.unit_price) }}
                   </td>
                   <td class="px-6 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
-                    {{ invoice.currency }} {{ formatCurrency(item.total_price) }}
+                    {{ invoice.currency?.symbol ?? invoice.currency?.code ?? '' }} {{ formatCurrency(item.total_price ?? 0) }}
                   </td>
                 </tr>
               </tbody>
@@ -269,7 +284,7 @@
             <div class="flex justify-between">
               <span class="text-sm text-gray-500 dark:text-gray-400">Subtotal:</span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ invoice.currency }} {{ formatCurrency(invoice.subtotal) }}
+                {{ invoice.currency?.symbol ?? invoice.currency?.code ?? '' }} {{ formatCurrency(invoice.subtotal) }}
               </span>
             </div>
             
@@ -278,7 +293,7 @@
                 {{ invoice.tax_label || 'Tax' }} ({{ invoice.tax_rate }}%):
               </span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ invoice.currency }} {{ formatCurrency(invoice.tax_amount) }}
+                {{ invoice.currency?.symbol ?? invoice.currency?.code ?? '' }} {{ formatCurrency(invoice.tax_amount) }}
               </span>
             </div>
             
@@ -286,7 +301,7 @@
               <div class="flex justify-between">
                 <span class="text-base font-medium text-gray-900 dark:text-white">Total:</span>
                 <span class="text-lg font-bold text-gray-900 dark:text-white">
-                  {{ invoice.currency }} {{ formatCurrency(invoice.total_amount) }}
+                  {{ invoice.currency?.symbol ?? invoice.currency?.code ?? '' }} {{ formatCurrency(invoice.total_amount) }}
                 </span>
               </div>
             </div>
@@ -396,13 +411,16 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { useInvoiceStore } from '@/stores/InvoiceStore'
+import type { Invoice } from '@/Types/Invoice'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
   Send,
   Download,
   Pencil,
+  Printer,
   Copy,
   CreditCard,
   User,
@@ -416,104 +434,28 @@ const router = useRouter()
 const route = useRoute()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const invoiceStore = useInvoiceStore()
+const { currentInvoice: invoice, loading, deleting } = storeToRefs(invoiceStore)
 
-interface Project {
-  id: number
-  name: string
-}
-
-interface Service {
-  id: number
-  title: string
-}
-
-interface InvoiceItem {
-  id: number
-  description: string
-  quantity: number
-  unit_price: number
-  total_price: number
-  service_period_start?: string
-  service_period_end?: string
-  notes?: string
-  service?: Service
-}
-
-interface Invoice {
-  id: number
-  invoice_number: string
-  client_id: number
-  project_id: number | null
-  freelancer_id: number
-  invoice_date: string
-  due_date: string | null
-  notes: string | null
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
-  currency: string
-  exchange_rate: number
-  subtotal: number
-  tax_amount: number
-  total_amount: number
-  total_amount_base_currency: number
-  tax_rate: number
-  tax_label: string | null
-  sent_at: string | null
-  client: Client | null
-  project: Project | null
-  items: InvoiceItem[]
-  created_at: string
-  updated_at: string
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const invoice = ref<Invoice | null>(null)
-const error = ref<string>('')
+const error = ref('')
 const showDeleteModal = ref(false)
 
 // Methods
 const fetchInvoice = async () => {
-  loading.value = true
   error.value = ''
-  
-  try {
-    const response = await axios.get(`/invoices/${route.params.id}`)
-    invoice.value = response.data.data
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      error.value = 'Invoice not found'
-    } else {
-      error.value = 'Failed to load invoice'
-    }
-    notifications.error(error.value, {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
+  await invoiceStore.fetchInvoice(Number(route.params.id))
+
+  if (!invoice.value) {
+    error.value = 'Invoice not found'
+    notifications.error(error.value, { title: 'Error' })
   }
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = (dateString: string): string =>
+  new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
 const getStatusClass = (status: string): string => {
   const classes = {
@@ -528,67 +470,35 @@ const getStatusClass = (status: string): string => {
 
 const getStatusLabel = (status: string): string => {
   const labels = {
-    draft: 'Draft',
-    sent: 'Sent',
-    paid: 'Paid',
-    overdue: 'Overdue',
-    cancelled: 'Cancelled'
+    draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', cancelled: 'Cancelled'
   }
   return labels[status as keyof typeof labels] || status
 }
 
-const isOverdue = (invoice: Invoice): boolean => {
-  if (!invoice.due_date || invoice.status === 'paid' || invoice.status === 'cancelled') {
-    return false
-  }
-  return new Date(invoice.due_date) < new Date() && invoice.status !== 'paid'
+const isOverdue = (inv: Invoice): boolean => {
+  if (!inv.due_date || inv.status === 'paid' || inv.status === 'cancelled') return false
+  return new Date(inv.due_date) < new Date()
 }
 
 const markAsSent = async () => {
   if (!invoice.value) return
-  
-  loading.value = true
-  try {
-    const response = await axios.patch(`/invoices/${invoice.value.id}/mark-as-sent`)
-    invoice.value = response.data.data
-    
-    notifications.success('Invoice marked as sent successfully', {
-      title: 'Success'
-    })
-  } catch (error: any) {
-    notifications.error('Failed to mark invoice as sent', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
+
+  const updated = await invoiceStore.markAsSent(invoice.value.id)
+  if (updated) {
+    notifications.success('Invoice marked as sent successfully', { title: 'Success' })
+  } else {
+    notifications.error('Failed to mark invoice as sent', { title: 'Error' })
   }
 }
 
 const downloadPDF = async () => {
   if (!invoice.value) return
-  
+
   try {
-    const response = await axios.get(`/invoices/${invoice.value.id}/pdf`, {
-      responseType: 'blob'
-    })
-    
-    // Create blob link to download
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `${invoice.value.invoice_number}.pdf`)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-    
-    notifications.success('Invoice PDF downloaded successfully', {
-      title: 'Success'
-    })
-  } catch (error: any) {
-    notifications.error('Failed to download invoice PDF', {
-      title: 'Error'
-    })
+    await invoiceStore.downloadPDF(invoice.value.id, invoice.value.invoice_number)
+    notifications.success('Invoice PDF downloaded successfully', { title: 'Success' })
+  } catch {
+    notifications.error('Failed to download invoice PDF', { title: 'Error' })
   }
 }
 
@@ -599,20 +509,14 @@ const confirmDelete = () => {
 const deleteInvoice = async () => {
   if (!invoice.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/invoices/${invoice.value.id}`)
-    notifications.success('Invoice deleted successfully', {
-      title: 'Success'
-    })
+  const success = await invoiceStore.deleteInvoice(invoice.value.id)
+  showDeleteModal.value = false
+
+  if (success) {
+    notifications.success('Invoice deleted successfully', { title: 'Success' })
     router.push('/invoices')
-  } catch (error: any) {
-    notifications.error('Failed to delete invoice', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
-    showDeleteModal.value = false
+  } else {
+    notifications.error('Failed to delete invoice', { title: 'Error' })
   }
 }
 

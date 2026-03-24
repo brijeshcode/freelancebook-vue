@@ -424,10 +424,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useClientStore } from '@/stores/ClientStore'
 import {
   ArrowLeft,
   Building2,
@@ -440,41 +440,13 @@ import {
 const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
+const clientStore = useClientStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  type: 'individual' | 'company'
-  contact_person: string | null
-  client_code: string
-  email: string | null
-  phone: string | null
-  website: string | null
-  address: string | null
-  city: string | null
-  state: string | null
-  country: string | null
-  postal_code: string | null
-  tax_number: string | null
-  notes: string | null
-  status: 'active' | 'inactive' | 'archived'
-  billing_preferences: any
-  financial: {
-    total_billed: number
-    total_received: number
-    current_balance: number
-  }
-  created_at: string
-  updated_at: string
-}
-
-// State
-const initialLoading = ref(true)
-const loading = ref(false)
-const client = ref<Client | null>(null)
-const errors = ref<Record<string, string[]>>({})
-const originalData = ref<any>({})
+// Bind store state
+const initialLoading = computed(() => clientStore.loading)
+const loading = computed(() => clientStore.saving)
+const client = computed(() => clientStore.currentClient)
+const errors = computed(() => clientStore.errors)
 
 // Form data
 const form = reactive({
@@ -494,111 +466,65 @@ const form = reactive({
   status: 'active' as 'active' | 'inactive' | 'archived'
 })
 
+const originalData = reactive({ ...form })
+
 // Computed
 const hasChanges = computed(() => {
-  return JSON.stringify(form) !== JSON.stringify(originalData.value)
+  return JSON.stringify(form) !== JSON.stringify(originalData)
 })
 
 // Methods
-const fetchClient = async () => {
-  initialLoading.value = true
-  try {
-    const response = await axios.get(`/clients/${route.params.id}`)
-    client.value = response.data.data
-    
-    // Populate form with client data
-    populateForm(client.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Client not found', {
-        title: 'Error'
-      })
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this client', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to load client details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    initialLoading.value = false
-  }
+const populateForm = () => {
+  if (!client.value) return
+
+  form.name = client.value.name
+  form.type = client.value.type
+  form.contact_person = client.value.contact_person || ''
+  form.email = client.value.email || ''
+  form.phone = client.value.phone || ''
+  form.website = client.value.website || ''
+  form.address = client.value.address || ''
+  form.city = client.value.city || ''
+  form.state = client.value.state || ''
+  form.country = client.value.country || ''
+  form.postal_code = client.value.postal_code || ''
+  form.tax_number = client.value.tax_number || ''
+  form.notes = client.value.notes || ''
+  form.status = client.value.status
+
+  Object.assign(originalData, { ...form })
 }
 
-const populateForm = (clientData: Client) => {
-  form.name = clientData.name
-  form.type = clientData.type
-  form.contact_person = clientData.contact_person || ''
-  form.email = clientData.email || ''
-  form.phone = clientData.phone || ''
-  form.website = clientData.website || ''
-  form.address = clientData.address || ''
-  form.city = clientData.city || ''
-  form.state = clientData.state || ''
-  form.country = clientData.country || ''
-  form.postal_code = clientData.postal_code || ''
-  form.tax_number = clientData.tax_number || ''
-  form.notes = clientData.notes || ''
-  form.status = clientData.status
-
-  // Store original data for comparison
-  originalData.value = { ...form }
+const fetchClient = async () => {
+  await clientStore.fetchClient(Number(route.params.id))
+  if (client.value) {
+    populateForm()
+  } else {
+    notifications.error('Client not found', { title: 'Error' })
+    router.push('/clients')
+  }
 }
 
 const handleSubmit = async () => {
   if (!hasChanges.value) {
-    notifications.info('No changes detected', {
-      title: 'Info'
-    })
+    notifications.info('No changes detected', { title: 'Info' })
     return
   }
 
-  loading.value = true
-  errors.value = {}
+  const data = { ...form }
+  if (data.type === 'individual') {
+    data.contact_person = ''
+  }
 
-  try {
-    // Prepare data - remove contact_person if type is individual
-    const data = { ...form }
-    if (data.type === 'individual') {
-      data.contact_person = ''
-    }
+  const updated = await clientStore.updateClient(Number(route.params.id), data)
 
-    const response = await axios.put(`/clients/${route.params.id}`, data)
-    
-    notifications.success('Client updated successfully', {
-      title: 'Success'
-    })
-
-    // Update the client data and original form data
-    client.value = response.data.data
-    populateForm(client.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      // Handle validation errors
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else if (error.response?.status === 404) {
-      notifications.error('Client not found', {
-        title: 'Error'
-      })
-      router.push('/clients')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this client', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to update client', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (updated) {
+    notifications.success('Client updated successfully', { title: 'Success' })
+    populateForm()
+  } else if (Object.keys(clientStore.errors).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to update client', { title: 'Error' })
   }
 }
 
@@ -611,8 +537,9 @@ const formatDate = (dateString: string): string => {
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchClient()
+onMounted(() => fetchClient())
+onUnmounted(() => {
+  clientStore.clearErrors()
+  clientStore.clearCurrentClient()
 })
-
 </script>

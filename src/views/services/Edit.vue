@@ -584,8 +584,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import axios from '@/services/axios'
+import { useFreelanceServiceStore } from '@/stores/FreelanceServiceStore'
+import { useClientStore } from '@/stores/ClientStore'
+import type { FreelanceService, UpdateFreelanceServiceRequest } from '@/services/System/FreelanceServiceService'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -597,58 +601,23 @@ import {
 } from 'lucide-vue-next'
 
 const route = useRoute()
-const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
+const serviceStore = useFreelanceServiceStore()
+const clientStore = useClientStore()
 
+const { currentService: service, loading: initialLoading, saving: loading, errors } = storeToRefs(serviceStore)
+const { clients, loading: loadingClients } = storeToRefs(clientStore)
+
+// Types
 interface Project {
   id: number
   name: string
 }
 
-interface Service {
-  id: number
-  client_id: number
-  project_id: number | null
-  title: string
-  description: string | null
-  amount: number
-  currency: string
-  has_tax: boolean
-  tax_name: string | null
-  tax_rate: number
-  tax_type: 'inclusive' | 'exclusive'
-  frequency: 'one-time' | 'weekly' | 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
-  start_date: string
-  next_billing_date: string | null
-  end_date: string | null
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled' | 'pending_approval'
-  is_active: boolean
-  billing_count: number
-  last_billed_at: string | null
-  tags: string[] | null
-  notes: string | null
-  client: Client | null
-  project: Project | null
-  created_at: string
-  updated_at: string
-}
-
 // State
-const initialLoading = ref(true)
-const loading = ref(false)
-const loadingClients = ref(false)
 const loadingProjects = ref(false)
-const service = ref<Service | null>(null)
-const clients = ref<Client[]>([])
 const projects = ref<Project[]>([])
-const errors = ref<Record<string, string[]>>({})
 const originalData = ref<any>({})
 const tagsInput = ref('')
 
@@ -713,45 +682,13 @@ const calculatedTotalAmount = computed(() => {
 
 // Methods
 const fetchService = async () => {
-  initialLoading.value = true
-  try {
-    const response = await axios.get(`/services/${route.params.id}`)
-    service.value = response.data.data
-    
-    // Populate form with service data
-    populateForm(service.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      notifications.error('Service not found', {
-        title: 'Error'
-      })
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this service', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to load service details', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    initialLoading.value = false
-  }
+  const id = Number(route.params.id)
+  await serviceStore.fetchService(id)
+  if (service.value) populateForm(service.value)
 }
 
 const fetchClients = async () => {
-  loadingClients.value = true
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  } finally {
-    loadingClients.value = false
-  }
+  await clientStore.fetchClients()
 }
 
 const fetchProjects = async () => {
@@ -773,13 +710,13 @@ const fetchProjects = async () => {
   }
 }
 
-const populateForm = (serviceData: Service) => {
+const populateForm = (serviceData: FreelanceService) => {
   form.client_id = serviceData.client_id?.toString() || ''
   form.project_id = serviceData.project_id?.toString() || ''
   form.title = serviceData.title
   form.description = serviceData.description || ''
   form.amount = serviceData.amount
-  form.currency = serviceData.currency
+  form.currency = serviceData.currency.code
   form.has_tax = serviceData.has_tax
   form.tax_name = serviceData.tax_name || ''
   form.tax_rate = serviceData.tax_rate
@@ -885,75 +822,39 @@ const getStatusLabel = (status: string): string => {
 
 const handleSubmit = async () => {
   if (!hasChanges.value) {
-    notifications.info('No changes detected', {
-      title: 'Info'
-    })
+    notifications.info('No changes detected', { title: 'Info' })
     return
   }
 
-  loading.value = true
-  errors.value = {}
+  serviceStore.clearErrors()
 
-  try {
-    // Prepare data - clean up empty values
-    const data = { ...form }
-    
-    // Convert empty strings to null for optional fields
-    if (!data.project_id) data.project_id = null
-    if (!data.description) data.description = null
-    if (!data.end_date) data.end_date = null
-    if (!data.notes) data.notes = null
-    
-    // Handle tax fields
-    if (!data.has_tax) {
-      data.tax_name = null
-      data.tax_rate = 0
-    }
-    
-    // Handle recurring billing fields
-    if (data.frequency === 'one-time') {
-      data.next_billing_date = null
-    } else if (!data.next_billing_date) {
-      data.next_billing_date = null
-    }
-    
-    // Handle tags
-    if (data.tags.length === 0) {
-      data.tags = null
-    }
+  const data = { ...form } as UpdateFreelanceServiceRequest
 
-    const response = await axios.put(`/services/${route.params.id}`, data)
-    
-    notifications.success('Service updated successfully', {
-      title: 'Success'
-    })
+  if (!data.project_id) data.project_id = null
+  if (!data.description) data.description = null
+  if (!data.end_date) data.end_date = null
+  if (!data.notes) data.notes = null
 
-    // Update the service data and original form data
-    service.value = response.data.data
-    populateForm(service.value)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else if (error.response?.status === 404) {
-      notifications.error('Service not found', {
-        title: 'Error'
-      })
-      router.push('/services')
-    } else if (error.response?.status === 403) {
-      notifications.error('You do not have permission to edit this service', {
-        title: 'Access Denied'
-      })
-    } else {
-      notifications.error('Failed to update service', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (!data.has_tax) {
+    data.tax_name = null
+    data.tax_rate = 0
+  }
+
+  if (data.frequency === 'one-time' || !data.next_billing_date) {
+    data.next_billing_date = null
+  }
+
+  if (!data.tags?.length) data.tags = null
+
+  const updated = await serviceStore.updateService(Number(route.params.id), data)
+
+  if (updated) {
+    notifications.success('Service updated successfully', { title: 'Success' })
+    populateForm(updated)
+  } else if (Object.keys(errors.value).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to update service', { title: 'Error' })
   }
 }
 

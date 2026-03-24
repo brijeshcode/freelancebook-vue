@@ -192,21 +192,18 @@
               </label>
               <select
                 id="currency"
-                v-model="form.currency"
+                v-model="form.currency_id"
                 required
                 class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-                :class="{ 'border-red-500 focus:ring-red-500 focus:border-red-500': errors.currency }"
+                :class="{ 'border-red-500 focus:ring-red-500 focus:border-red-500': errors.currency_id }"
               >
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="CAD">CAD - Canadian Dollar</option>
-                <option value="AUD">AUD - Australian Dollar</option>
-                <option value="INR">INR - Indian Rupee</option>
-                <option value="JPY">JPY - Japanese Yen</option>
+                <option value="">Select currency</option>
+                <option v-for="c in currencies" :key="c.id" :value="c.id">
+                  {{ c.code }} - {{ c.name }}
+                </option>
               </select>
-              <p v-if="errors.currency" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ Array.isArray(errors.currency) ? errors.currency[0] : errors.currency }}
+              <p v-if="errors.currency_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ Array.isArray(errors.currency_id) ? errors.currency_id[0] : errors.currency_id }}
               </p>
             </div>
           </div>
@@ -290,22 +287,22 @@
           </div>
 
           <!-- Price Summary -->
-          <div v-if="form.amount > 0" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+          <div v-if="form.amount && form.amount > 0" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
             <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Price Summary</h4>
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">
                 <span class="text-gray-600 dark:text-gray-400">Base Amount:</span>
-                <span class="text-gray-900 dark:text-white">{{ form.currency }} {{ formatCurrency(calculatedBaseAmount) }}</span>
+                <span class="text-gray-900 dark:text-white">{{ selectedCurrency?.code ?? '' }} {{ formatCurrency(calculatedBaseAmount) }}</span>
               </div>
               <div v-if="form.has_tax && form.tax_rate > 0" class="flex justify-between">
                 <span class="text-gray-600 dark:text-gray-400">
                   {{ form.tax_name || 'Tax' }} ({{ form.tax_rate }}%):
                 </span>
-                <span class="text-gray-900 dark:text-white">{{ form.currency }} {{ formatCurrency(calculatedTaxAmount) }}</span>
+                <span class="text-gray-900 dark:text-white">{{ selectedCurrency?.code ?? '' }} {{ formatCurrency(calculatedTaxAmount) }}</span>
               </div>
               <div class="flex justify-between font-medium border-t border-gray-200 dark:border-gray-600 pt-2">
                 <span class="text-gray-900 dark:text-white">Total Amount:</span>
-                <span class="text-gray-900 dark:text-white">{{ form.currency }} {{ formatCurrency(calculatedTotalAmount) }}</span>
+                <span class="text-gray-900 dark:text-white">{{ selectedCurrency?.code ?? '' }} {{ formatCurrency(calculatedTotalAmount) }}</span>
               </div>
             </div>
           </div>
@@ -485,7 +482,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import axios from '@/services/axios'
+import { useFreelanceServiceStore } from '@/stores/FreelanceServiceStore'
+import { useClientStore } from '@/stores/ClientStore'
+import { useListDataStore } from '@/stores/ListDataStore'
+import type { CreateFreelanceServiceRequest } from '@/services/System/FreelanceServiceService'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -496,25 +498,24 @@ const route = useRoute()
 const router = useRouter()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
+const serviceStore = useFreelanceServiceStore()
+const clientStore = useClientStore()
 
+const listDataStore = useListDataStore()
+
+const { saving: loading, errors } = storeToRefs(serviceStore)
+const { clients, loading: loadingClients } = storeToRefs(clientStore)
+const { currencies } = storeToRefs(listDataStore)
+
+// Types
 interface Project {
   id: number
   name: string
 }
 
 // State
-const loading = ref(false)
-const loadingClients = ref(false)
 const loadingProjects = ref(false)
-const clients = ref<Client[]>([])
 const projects = ref<Project[]>([])
-const errors = ref<Record<string, string[]>>({})
 const tagsInput = ref('')
 
 // Form data
@@ -524,7 +525,9 @@ const form = reactive({
   title: '',
   description: '',
   amount: null as number | null,
-  currency: 'INR',
+  currency_id: '' as string | number,
+  exchange_rate: 1 as number,
+  calculation_type: 'multiply' as 'multiply' | 'divide',
   has_tax: false,
   tax_name: '',
   tax_rate: 0,
@@ -563,6 +566,10 @@ const calculatedTaxAmount = computed(() => {
   }
 })
 
+const selectedCurrency = computed(() =>
+  currencies.value.find(c => c.id === Number(form.currency_id)) ?? null
+)
+
 const calculatedTotalAmount = computed(() => {
   if (!form.amount) return 0
   
@@ -577,22 +584,12 @@ const calculatedTotalAmount = computed(() => {
 
 // Methods
 const fetchClients = async () => {
-  loadingClients.value = true
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-    
-    // Pre-select client if passed via query parameter
-    if (route.query.client_id) {
-      form.client_id = route.query.client_id.toString()
-      await fetchProjects()
-    }
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
-  } finally {
-    loadingClients.value = false
+  await clientStore.fetchClients()
+
+  // Pre-select client if passed via query parameter
+  if (route.query.client_id) {
+    form.client_id = route.query.client_id.toString()
+    await fetchProjects()
   }
 }
 
@@ -671,66 +668,43 @@ const formatCurrency = (amount: number): string => {
 }
 
 const handleSubmit = async () => {
-  loading.value = true
-  errors.value = {}
+  serviceStore.clearErrors()
 
-  try {
-    // Prepare data - clean up empty values
-    const data = { ...form }
-    
-    // Convert empty strings to null for optional fields
-    if (!data.project_id) data.project_id = null
-    if (!data.description) data.description = null
-    if (!data.end_date) data.end_date = null
-    if (!data.notes) data.notes = null
-    
-    // Handle tax fields
-    if (!data.has_tax) {
-      data.tax_name = null
-      data.tax_rate = 0
-    }
-    
-    // Handle recurring billing fields
-    if (data.frequency === 'one-time') {
-      data.next_billing_date = null
-    } else if (!data.next_billing_date) {
-      data.next_billing_date = null
-    }
-    
-    // Handle tags
-    if (data.tags.length === 0) {
-      data.tags = null
-    }
+  // Prepare data - clean up empty values
+  const data = { ...form } as CreateFreelanceServiceRequest
 
-    const response = await axios.post('/services', data)
-    
-    notifications.success('Service created successfully', {
-      title: 'Success'
-    })
+  if (!data.project_id) data.project_id = null
+  if (!data.description) data.description = null
+  if (!data.end_date) data.end_date = null
+  if (!data.notes) data.notes = null
 
-    // Redirect to the service details page
-    router.push(`/services/${response.data.data.id}`)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      // Handle validation errors
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to create service', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (!data.has_tax) {
+    data.tax_name = null
+    data.tax_rate = 0
+  }
+
+  if (data.frequency === 'one-time' || !data.next_billing_date) {
+    data.next_billing_date = null
+  }
+
+  if (!data.tags?.length) data.tags = null
+
+  const service = await serviceStore.createService(data)
+
+  if (service) {
+    notifications.success('Service created successfully', { title: 'Success' })
+    router.push(`/services/${service.id}`)
+  } else if (Object.keys(errors.value).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to create service', { title: 'Error' })
   }
 }
 
 // Lifecycle
 onMounted(() => {
   fetchClients()
+  listDataStore.getCurrencies()
   
   // Set default start date to today
   if (!form.start_date) {

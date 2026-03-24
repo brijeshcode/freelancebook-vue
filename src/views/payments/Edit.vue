@@ -500,7 +500,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from '@/services/axios'
+import { storeToRefs } from 'pinia'
+import { usePaymentStore } from '@/stores/PaymentStore'
+import { useClientStore } from '@/stores/ClientStore'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -520,42 +522,15 @@ const router = useRouter()
 const route = useRoute()
 const notifications = useNotifications()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  email?: string
-}
+const paymentStore = usePaymentStore()
+const clientStore = useClientStore()
 
-interface ClientBalance {
-  outstanding_balance: number
-  total_invoiced: number
-  total_paid: number
-}
+const { saving: loading, errors, clientBalance, currentPayment: payment } = storeToRefs(paymentStore)
+const { clients } = storeToRefs(clientStore)
 
-interface Payment {
-  id: number
-  transaction_number: string
-  client_id: number
-  amount: number
-  currency: string
-  exchange_rate: number
-  payment_date: string
-  payment_method: string
-  transaction_reference: string | null
-  notes: string | null
-  status: string
-  receipt_attachments: string[] | null
-}
-
-// State
-const loading = ref(false)
+// Local UI state
 const initialLoading = ref(true)
 const loadError = ref('')
-const payment = ref<Payment | null>(null)
-const clients = ref<Client[]>([])
-const clientBalance = ref<ClientBalance | null>(null)
-const errors = ref<Record<string, string[]>>({})
 const existingFiles = ref<string[]>([])
 const newFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement>()
@@ -571,165 +546,98 @@ const form = reactive({
   payment_method: '',
   transaction_reference: '',
   notes: '',
-  status: '',
+  status: '' as 'pending' | 'completed' | 'failed' | 'refunded' | '',
   receipt_attachments: [] as string[]
 })
 
 // Computed
-const baseAmount = computed(() => {
-  return (form.amount || 0) * form.exchange_rate
-})
+const baseAmount = computed(() => (form.amount || 0) * form.exchange_rate)
 
 // Methods
-const fetchPayment = async () => {
+const loadPayment = async () => {
   initialLoading.value = true
   loadError.value = ''
-  
-  try {
-    const response = await axios.get(`/payments/${route.params.id}`)
-    payment.value = response.data.data
-    
-    // Populate form with payment data
-    form.client_id = payment.value.client_id.toString()
-    form.amount = payment.value.amount
-    form.currency = payment.value.currency
-    form.exchange_rate = payment.value.exchange_rate
-    form.payment_date = payment.value.payment_date
-    form.payment_method = payment.value.payment_method
-    form.transaction_reference = payment.value.transaction_reference || ''
-    form.notes = payment.value.notes || ''
-    form.status = payment.value.status
-    
-    // Handle existing files
-    existingFiles.value = payment.value.receipt_attachments || []
-    
-    // Load related data
-    await Promise.all([
-      fetchClients(),
-      onClientChange()
-    ])
-    
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      loadError.value = 'Payment not found'
-    } else {
-      loadError.value = 'Failed to load payment'
-    }
-  } finally {
-    initialLoading.value = false
-  }
-}
 
-const fetchClients = async () => {
-  try {
-    const response = await axios.get('/clients')
-    clients.value = response.data.data
-  } catch (error: any) {
-    notifications.error('Failed to load clients', {
-      title: 'Error'
-    })
+  await Promise.all([
+    paymentStore.fetchPayment(Number(route.params.id)),
+    clientStore.fetchClients(),
+  ])
+
+  if (!payment.value) {
+    loadError.value = 'Payment not found'
+    initialLoading.value = false
+    return
   }
+
+  form.client_id = payment.value.client_id.toString()
+  form.amount = payment.value.amount
+  form.currency = payment.value.currency
+  form.exchange_rate = payment.value.exchange_rate
+  form.payment_date = payment.value.payment_date
+  form.payment_method = payment.value.payment_method
+  form.transaction_reference = payment.value.transaction_reference ?? ''
+  form.notes = payment.value.notes ?? ''
+  form.status = payment.value.status
+  existingFiles.value = payment.value.receipt_attachments ?? []
+
+  await onClientChange()
+  initialLoading.value = false
 }
 
 const onClientChange = async () => {
-  clientBalance.value = null
-  
-  if (form.client_id) {
-    await fetchClientBalance()
-  }
-}
+  paymentStore.clearClientBalance()
 
-const fetchClientBalance = async () => {
-  try {
-    const response = await axios.get(`/clients/${form.client_id}/balance`)
-    clientBalance.value = response.data.data
-  } catch (error: any) {
-    console.error('Failed to load client balance:', error)
+  if (form.client_id) {
+    await paymentStore.fetchClientBalance(Number(form.client_id))
   }
 }
 
 const calculateBaseAmount = () => {
-  // This is reactive, so the computed property will update automatically
+  // Computed property updates automatically
 }
 
 const getFileIcon = (filename: string) => {
-  const extension = getFileExtension(filename).toLowerCase()
-  
-  if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
-    return FileImage
-  } else if (extension === 'pdf') {
-    return FileType
-  } else {
-    return File
-  }
+  const ext = getFileExtension(filename).toLowerCase()
+  if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) return FileImage
+  if (ext === 'pdf') return FileType
+  return File
 }
 
-const getFileName = (filepath: string): string => {
-  return filepath.split('/').pop() || filepath
-}
+const getFileName = (filepath: string): string => filepath.split('/').pop() || filepath
 
-const getFileExtension = (filename: string): string => {
-  return filename.split('.').pop() || ''
-}
+const getFileExtension = (filename: string): string => filename.split('.').pop() || ''
 
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
-  
+
   if (files) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      
-      // Validate file size (10MB max)
+
       if (file.size > 10 * 1024 * 1024) {
-        notifications.error(`File ${file.name} is too large. Maximum size is 10MB.`, {
-          title: 'File Upload Error'
-        })
+        notifications.error(`File ${file.name} is too large. Maximum size is 10MB.`, { title: 'File Upload Error' })
         continue
       }
-      
-      // Validate file type
+
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
       if (!allowedTypes.includes(file.type)) {
-        notifications.error(`File ${file.name} is not a supported format.`, {
-          title: 'File Upload Error'
-        })
+        notifications.error(`File ${file.name} is not a supported format.`, { title: 'File Upload Error' })
         continue
       }
-      
+
       newFiles.value.push(file)
     }
   }
-  
-  // Reset the input
-  if (target) {
-    target.value = ''
-  }
+
+  if (target) target.value = ''
 }
 
-const removeExistingFile = (index: number) => {
-  existingFiles.value.splice(index, 1)
-}
-
-const removeNewFile = (index: number) => {
-  newFiles.value.splice(index, 1)
-}
+const removeExistingFile = (index: number) => existingFiles.value.splice(index, 1)
+const removeNewFile = (index: number) => newFiles.value.splice(index, 1)
 
 const viewFile = async (filepath: string) => {
-  try {
-    const response = await axios.get(`/payments/view-file?path=${encodeURIComponent(filepath)}`, {
-      responseType: 'blob'
-    })
-    
-    // Create blob URL and open in new tab
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    window.open(url, '_blank')
-    window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    notifications.error('Failed to view file', {
-      title: 'Error'
-    })
-  }
+  await paymentStore.viewFile(filepath)
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -740,12 +648,8 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const getStatusClass = (status: string): string => {
   const classes = {
@@ -758,77 +662,41 @@ const getStatusClass = (status: string): string => {
 }
 
 const getStatusLabel = (status: string): string => {
-  const labels = {
-    pending: 'Pending',
-    completed: 'Completed',
-    failed: 'Failed',
-    refunded: 'Refunded'
-  }
+  const labels = { pending: 'Pending', completed: 'Completed', failed: 'Failed', refunded: 'Refunded' }
   return labels[status as keyof typeof labels] || status
 }
 
-const uploadNewFiles = async (): Promise<string[]> => {
-  if (newFiles.value.length === 0) return []
-  
-  const formData = new FormData()
-  newFiles.value.forEach((file, index) => {
-    formData.append(`files[${index}]`, file)
-  })
-  
-  try {
-    const response = await axios.post('/payments/upload-receipts', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    return response.data.file_paths || []
-  } catch (error: any) {
-    notifications.error('Failed to upload receipt files', {
-      title: 'Upload Error'
-    })
-    return []
-  }
-}
-
 const updatePayment = async () => {
-  loading.value = true
-  errors.value = {}
-  
-  try {
-    // Upload new files if any
-    let newFilePaths: string[] = []
-    if (newFiles.value.length > 0) {
-      newFilePaths = await uploadNewFiles()
+  if (!payment.value) return
+
+  paymentStore.clearErrors()
+
+  // Upload new files first if any
+  if (newFiles.value.length > 0) {
+    const paths = await paymentStore.uploadReceipts(newFiles.value)
+    if (paths.length === 0) {
+      notifications.error('Failed to upload receipt files', { title: 'Upload Error' })
+      return
     }
-    
-    // Combine existing files with new files
-    form.receipt_attachments = [...existingFiles.value, ...newFilePaths]
-    
-    const response = await axios.put(`/payments/${route.params.id}`, form)
-    
-    notifications.success('Payment updated successfully', {
-      title: 'Success'
-    })
-    
-    router.push(`/payments/${response.data.data.id}`)
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      errors.value = error.response.data.errors || {}
-      notifications.error('Please check the form for errors', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to update payment', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+    existingFiles.value = [...existingFiles.value, ...paths]
+  }
+
+  form.receipt_attachments = [...existingFiles.value]
+
+  const updated = await paymentStore.updatePayment(
+    payment.value.id,
+    { ...form, status: form.status as 'pending' | 'completed' | 'failed' | 'refunded' }
+  )
+
+  if (updated) {
+    router.push(`/payments/${updated.id}`)
+  } else if (Object.keys(errors.value).length > 0) {
+    notifications.error('Please check the form for errors', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to update payment', { title: 'Error' })
   }
 }
 
 // Lifecycle
-onMounted(async () => {
-  await fetchPayment()
-})
+onMounted(() => loadPayment())
 </script>

@@ -49,7 +49,7 @@
             id="status"
             v-model="filters.status"
             class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-            @change="fetchProjects"
+            @change="fetchProjects(1)"
           >
             <option value="">All Status</option>
             <option value="prospective">Prospective</option>
@@ -70,7 +70,7 @@
             id="per-page"
             v-model="filters.per_page"
             class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200"
-            @change="fetchProjects"
+            @change="fetchProjects(1)"
           >
             <option value="15">15</option>
             <option value="25">25</option>
@@ -355,10 +355,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
+import { ref, computed, onMounted } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
+import { useProjectStore } from '@/stores/ProjectStore'
+import type { Project } from '@/services/System/ProjectService'
 import {
   Plus,
   Search,
@@ -373,103 +373,27 @@ import {
   AlertTriangle
 } from 'lucide-vue-next'
 
-const router = useRouter()
 const notifications = useNotifications()
+const projectStore = useProjectStore()
 
-// Types
-interface Client {
-  id: number
-  name: string
-  client_code: string
-}
+// Bind store state
+const loading = computed(() => projectStore.loading)
+const deleting = computed(() => projectStore.deleting)
+const projects = computed(() => projectStore.projects)
+const pagination = computed(() => projectStore.pagination)
+const filters = projectStore.filters
 
-interface Project {
-  id: number
-  name: string
-  budget: number | null
-  budget_currency: string
-  notes: string | null
-  project_details: string | null
-  start_date: string | null
-  end_date: string | null
-  deadline: string | null
-  estimated_hours: number | null
-  actual_hours: number
-  total_paid: number
-  payment_currency: string
-  status: 'prospective' | 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled'
-  budget_exceeded: boolean
-  remaining_budget: number | null
-  time_variance: number | null
-  client: Client | null
-  freelancer: {
-    id: number
-    name: string
-  }
-  created_at: string
-  updated_at: string
-}
-
-interface Pagination {
-  current_page: number
-  per_page: number
-  total: number
-  last_page: number
-  from: number
-  to: number
-  has_more_pages: boolean
-  next_page_url: string | null
-  prev_page_url: string | null
-  first_page_url: string
-  last_page_url: string
-}
-
-// State
-const loading = ref(false)
-const deleting = ref(false)
-const projects = ref<Project[]>([])
-const pagination = ref<Pagination | null>(null)
+// Local UI state
 const showDeleteModal = ref(false)
 const projectToDelete = ref<Project | null>(null)
 const searchTimeout = ref<number | null>(null)
 
-const filters = reactive({
-  search: '',
-  status: '',
-  per_page: 15
-})
-
 // Methods
-const fetchProjects = async (page = 1) => {
-  loading.value = true
-  try {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: filters.per_page.toString()
-    })
-
-    if (filters.search) params.append('search', filters.search)
-    if (filters.status) params.append('status', filters.status)
-
-    const response = await axios.get(`/projects?${params}`)
-    projects.value = response.data.data
-    pagination.value = response.data.pagination
-  } catch (error: any) {
-    notifications.error('Failed to load projects', {
-      title: 'Error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
+const fetchProjects = (page = 1) => projectStore.fetchProjects(page)
 
 const debounceSearch = () => {
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
-  }
-  searchTimeout.value = setTimeout(() => {
-    fetchProjects(1)
-  }, 300)
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => fetchProjects(1), 300)
 }
 
 const changePage = (page: number) => {
@@ -524,11 +448,8 @@ const isOverdue = (project: Project): boolean => {
   return new Date(project.deadline) < new Date()
 }
 
-const trackTime = (project: Project) => {
-  // Placeholder for time tracking functionality
-  notifications.info('Time tracking feature coming soon!', {
-    title: 'Feature Preview'
-  })
+const trackTime = (_project: Project) => {
+  notifications.info('Time tracking feature coming soon!', { title: 'Feature Preview' })
 }
 
 const confirmDelete = (project: Project) => {
@@ -539,26 +460,18 @@ const confirmDelete = (project: Project) => {
 const deleteProject = async () => {
   if (!projectToDelete.value) return
 
-  deleting.value = true
-  try {
-    await axios.delete(`/projects/${projectToDelete.value.id}`)
-    notifications.success('Project deleted successfully', {
-      title: 'Success'
-    })
+  const success = await projectStore.deleteProject(projectToDelete.value.id)
+
+  if (success) {
+    notifications.success('Project deleted successfully', { title: 'Success' })
     showDeleteModal.value = false
     projectToDelete.value = null
     await fetchProjects(pagination.value?.current_page || 1)
-  } catch (error: any) {
-    notifications.error('Failed to delete project', {
-      title: 'Error'
-    })
-  } finally {
-    deleting.value = false
+  } else {
+    notifications.error('Failed to delete project', { title: 'Error' })
   }
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchProjects()
-})
+onMounted(() => fetchProjects())
 </script>

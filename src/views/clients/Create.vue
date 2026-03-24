@@ -371,10 +371,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { reactive, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@/services/axios'
 import { useNotifications } from '@/composables/useNotifications'
+import { useClientStore } from '@/stores/ClientStore'
 import {
   ArrowLeft,
   Building2,
@@ -384,10 +384,11 @@ import {
 
 const router = useRouter()
 const notifications = useNotifications()
+const clientStore = useClientStore()
 
-// State
-const loading = ref(false)
-const errors = ref<Record<string, string[]>>({})
+// Bind store state
+const loading = computed(() => clientStore.saving)
+const errors = computed(() => clientStore.errors)
 
 // Form data
 const form = reactive({
@@ -409,39 +410,22 @@ const form = reactive({
 
 // Methods
 const handleSubmit = async () => {
-  loading.value = true
-  errors.value = {}
+  const data = { ...form }
+  if (data.type === 'individual') {
+    data.contact_person = ''
+  }
 
-  try {
-    // Prepare data - remove contact_person if type is individual
-    const data = { ...form }
-    if (data.type === 'individual') {
-      data.contact_person = ''
-    }
+  const client = await clientStore.createClient(data)
 
-    const response = await axios.post('/clients/store', data)
-    
-    notifications.success('Client created successfully', {
-      title: 'Success'
-    })
-
-    // Redirect to the client details page
-    router.push(`/clients/${response.data.data.id}`)
-    
-  } catch (error: any) {
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      // Handle validation errors
-      errors.value = error.response.data.errors
-      notifications.error('Please fix the form errors and try again', {
-        title: 'Validation Error'
-      })
-    } else {
-      notifications.error('Failed to create client', {
-        title: 'Error'
-      })
-    }
-  } finally {
-    loading.value = false
+  if (client) {
+    notifications.success('Client created successfully', { title: 'Success' })
+    router.push(`/clients/${client.id}`)
+  } else if (Object.keys(clientStore.errors).length > 0) {
+    notifications.error('Please fix the form errors and try again', { title: 'Validation Error' })
+  } else {
+    notifications.error('Failed to create client', { title: 'Error' })
   }
 }
+
+onUnmounted(() => clientStore.clearErrors())
 </script>
