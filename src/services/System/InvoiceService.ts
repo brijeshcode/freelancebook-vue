@@ -1,9 +1,9 @@
 import { get, post, put, patch, del } from '@/services/axios';
 import api from '@/services/axios';
-import type { Invoice, CreateInvoiceRequest, UpdateInvoiceRequest, InvoiceFilters } from '@/Types/Invoice';
+import type { Invoice, InvoiceStatus, CreateInvoiceRequest, UpdateInvoiceRequest, InvoiceFilters } from '@/Types/Invoice';
 import type { Pagination } from '@/Types/Paginate';
 
-export type { Invoice, CreateInvoiceRequest, UpdateInvoiceRequest, InvoiceFilters };
+export type { Invoice, InvoiceStatus, CreateInvoiceRequest, UpdateInvoiceRequest, InvoiceFilters };
 
 export interface InvoicePaginatedResponse {
     data: Invoice[];
@@ -120,6 +120,23 @@ class InvoiceService {
             return response.data.data!;
         } catch (error) {
             console.error('Error marking invoice as sent:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Change invoice status
+     */
+    async changeStatus(id: number, status: InvoiceStatus): Promise<Invoice> {
+        try {
+            const response = await patch<Invoice>(`${this.baseUrl}/${id}/status`, { status }, {
+                loadingMessage: 'Updating invoice status...',
+                showSuccessNotification: true,
+                successMessage: 'Invoice status updated successfully',
+            });
+            return response.data.data!;
+        } catch (error) {
+            console.error('Error changing invoice status:', error);
             throw error;
         }
     }

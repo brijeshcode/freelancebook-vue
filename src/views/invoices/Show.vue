@@ -7,13 +7,11 @@
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
             {{ invoice?.invoice_number || 'Loading...' }}
           </h1>
-          <span
+          <InvoiceStatusDropdown
             v-if="invoice"
-            class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-            :class="getStatusClass(invoice.status)"
-          >
-            {{ getStatusLabel(invoice.status) }}
-          </span>
+            :invoice-id="invoice.id"
+            :status="invoice.status"
+          />
           <span
             v-if="invoice && isOverdue(invoice)"
             class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
@@ -414,6 +412,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useInvoiceStore } from '@/stores/InvoiceStore'
 import type { Invoice } from '@/Types/Invoice'
+import InvoiceStatusDropdown from '@/Components/InvoiceStatusDropdown.vue'
 import { useNotifications } from '@/composables/useNotifications'
 import {
   ArrowLeft,
@@ -457,23 +456,6 @@ const formatCurrency = (amount: number): string =>
 const formatDate = (dateString: string): string =>
   new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
-const getStatusClass = (status: string): string => {
-  const classes = {
-    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
-    sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
-    paid: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    overdue: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-    cancelled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-  }
-  return classes[status as keyof typeof classes] || classes.draft
-}
-
-const getStatusLabel = (status: string): string => {
-  const labels = {
-    draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', cancelled: 'Cancelled'
-  }
-  return labels[status as keyof typeof labels] || status
-}
 
 const isOverdue = (inv: Invoice): boolean => {
   if (!inv.due_date || inv.status === 'paid' || inv.status === 'cancelled') return false

@@ -289,7 +289,7 @@
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm">
                   <div class="text-gray-900 dark:text-white font-medium">
-                    {{ payment.currency }} {{ formatCurrency(payment.amount) }}
+                    {{ payment.currency?.symbol }} {{ formatCurrency(payment.amount) }}
                   </div>
                   <div v-if="payment.exchange_rate !== 1" class="text-gray-500 dark:text-gray-400">
                     Base: {{ formatCurrency(payment.amount_base_currency) }}

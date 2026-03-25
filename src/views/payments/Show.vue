@@ -180,7 +180,7 @@
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Currency:</span>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ payment.currency }}
+                  {{ payment.currency?.symbol }} {{ payment.currency?.code }}
                 </span>
               </div>
               
@@ -221,7 +221,7 @@
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Original Amount:</span>
                 <span class="text-lg font-bold text-gray-900 dark:text-white">
-                  {{ payment.currency }} {{ formatCurrency(payment.amount) }}
+                  {{ payment.currency?.symbol }} {{ formatCurrency(payment.amount) }}
                 </span>
               </div>
               
@@ -236,7 +236,7 @@
             <div v-if="payment.exchange_rate !== 1" class="space-y-3">
               <div class="text-sm text-gray-500 dark:text-gray-400">
                 <span class="font-medium">Conversion:</span><br>
-                {{ payment.currency }} {{ formatCurrency(payment.amount) }} × {{ payment.exchange_rate }} = {{ formatCurrency(payment.amount_base_currency) }}
+                {{ payment.currency?.symbol }} {{ formatCurrency(payment.amount) }} × {{ payment.exchange_rate }} = {{ formatCurrency(payment.amount_base_currency) }}
               </div>
             </div>
           </div>

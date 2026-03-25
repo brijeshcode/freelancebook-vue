@@ -3,9 +3,10 @@ import { ref, reactive } from 'vue';
 import invoiceService from '@/services/System/InvoiceService';
 import type {
     Invoice,
+    InvoiceStatus,
     CreateInvoiceRequest,
     UpdateInvoiceRequest,
-    InvoiceFilters, 
+    InvoiceFilters,
     InvoiceStats,
 } from '@/services/System/InvoiceService';
 import type { Pagination } from '@/Types/Paginate';
@@ -31,6 +32,7 @@ export const useInvoiceStore = defineStore('invoice', () => {
         status: '',
         client_id: '',
         date_from: '',
+        billing_month: '',
         per_page: 15,
         page: 1,
     });
@@ -143,6 +145,22 @@ export const useInvoiceStore = defineStore('invoice', () => {
     };
 
     /**
+     * Change invoice status
+     */
+    const changeStatus = async (id: number, status: InvoiceStatus): Promise<Invoice | null> => {
+        try {
+            const updated = await invoiceService.changeStatus(id, status);
+            const index = invoices.value.findIndex(i => i.id === id);
+            if (index !== -1) invoices.value[index] = updated;
+            if (currentInvoice.value?.id === id) currentInvoice.value = updated;
+            return updated;
+        } catch (error) {
+            console.error('Error changing invoice status:', error);
+            return null;
+        }
+    };
+
+    /**
      * Mark an invoice as sent and sync it back into state
      */
     const markAsSent = async (id: number): Promise<Invoice | null> => {
@@ -191,6 +209,7 @@ export const useInvoiceStore = defineStore('invoice', () => {
         filters.status = '';
         filters.client_id = '';
         filters.date_from = '';
+        filters.billing_month = '';
         filters.per_page = 15;
         filters.page = 1;
         await fetchInvoices(1);
@@ -228,6 +247,7 @@ export const useInvoiceStore = defineStore('invoice', () => {
         createInvoice,
         updateInvoice,
         deleteInvoice,
+        changeStatus,
         markAsSent,
         downloadPDF,
         setFilter,

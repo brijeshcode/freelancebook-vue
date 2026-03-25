@@ -259,7 +259,12 @@
             </button>
           </div>
 
-          <div v-if="form.items.length === 0" class="text-center py-8">
+          <div v-if="loadingActiveSystems" class="text-center py-8">
+            <Loader2 class="h-8 w-8 mx-auto text-blue-500 animate-spin" />
+            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading active systems...</p>
+          </div>
+
+          <div v-else-if="form.items.length === 0" class="text-center py-8">
             <Package class="h-12 w-12 mx-auto text-gray-400" />
             <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No items added</h3>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -543,7 +548,7 @@ const { saving: loading, errors } = storeToRefs(invoiceStore)
 const { clients } = storeToRefs(clientStore)
 const { currencies, services: allServices } = storeToRefs(listDataStore)
 
-const { activeSystemList, activeSystems } = useFetchActiveSystem()
+const { activeSystemList, activeSystems, loadingActiveSystems } = useFetchActiveSystem()
 
 const SPECIAL_CLIENT_ID = Number(import.meta.env.VITE_SPECIAL_CLIENT_ID)
 
@@ -636,7 +641,17 @@ const populateFromActiveSystems = async () => {
     if (!s.tags?.includes('fixed')) return false
     if (!s.next_billing_date) return false
     const d = new Date(s.next_billing_date)
-    return d.getFullYear() === year && d.getMonth() + 1 === month
+    const nYear = d.getFullYear()
+    const nMonth = d.getMonth() + 1
+    const monthDiff = (year - nYear) * 12 + (month - nMonth)
+    switch (s.frequency) {
+      case 'monthly':     return true
+      case 'yearly':      return monthDiff % 12 === 0
+      case 'quarterly':   return monthDiff % 3 === 0
+      case 'half-yearly': return monthDiff % 6 === 0
+      case 'one-time':    return nYear === year && nMonth === month
+      default:            return false
+    }
   })
 
   // Fixed-price services (hosting, domain, email, etc.) — include directly
@@ -660,7 +675,7 @@ const populateFromActiveSystems = async () => {
       const service = maintenanceServices.find(s => s.metadata?.link === system.url)
       if (!service) return null
 
-      const isFullMonth = system.invoices > 15
+      const isFullMonth = system.invoices >= 15
       const unitPrice = isFullMonth
         ? Number(service.amount)
         : Math.ceil(Number(service.amount) / daysInMonth)
@@ -681,7 +696,7 @@ const populateFromActiveSystems = async () => {
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
-  form.items = [...otherItems, ...maintenanceItems]
+  form.items = [...otherItems, ...maintenanceItems].sort((a, b) => (b.unit_price * b.quantity) - (a.unit_price * a.quantity))
 }
 
 watch(() => form.billing_month, async (newVal) => {
@@ -699,19 +714,40 @@ const fetchClientProjects = async () => {
 }
 
 const autoPopulateItems = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-  const monthStart = new Date(year, month, 1).toISOString().split('T')[0]
-  const monthEnd = new Date(year, month + 1, 0).toISOString().split('T')[0]
+  let year: number, month: number // month is 1-based
+
+  if (form.billing_month) {
+    const [y, m] = form.billing_month.split('-').map(Number)
+    year = y
+    month = m
+  } else {
+    const now = new Date()
+    year = now.getFullYear()
+    month = now.getMonth() + 1
+  }
+
+  const mm = String(month).padStart(2, '0')
+  const monthStart = `${year}-${mm}-01`
+  const monthEnd = new Date(year, month, 0).toISOString().split('T')[0]
 
   const dueThisMonth = clientServices.value.filter(s => {
     if (!s.next_billing_date) return false
     const d = new Date(s.next_billing_date)
-    return d.getFullYear() === year && d.getMonth() === month
+    const nYear = d.getFullYear()
+    const nMonth = d.getMonth() + 1
+    const monthDiff = (year - nYear) * 12 + (month - nMonth)
+
+    switch (s.frequency) {
+      case 'monthly':    return true
+      case 'yearly':     return monthDiff % 12 === 0
+      case 'quarterly':  return monthDiff % 3 === 0
+      case 'half-yearly': return monthDiff % 6 === 0
+      case 'one-time':   return nYear === year && nMonth === month
+      default:           return false
+    }
   })
 
-  form.items = dueThisMonth.map(service => ({
+  form.items = [...dueThisMonth].sort((a, b) => Number(b.amount) - Number(a.amount)).map(service => ({
     _mode: 'service' as const,
     _showMore: false,
     service_id: String(service.id),

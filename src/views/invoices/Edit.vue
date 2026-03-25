@@ -62,22 +62,35 @@
               <select
                 id="client_id"
                 v-model="form.client_id"
+                disabled
                 :class="[
-                  'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200',
+                  'block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed',
                   errors.client_id
                     ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 ]"
-                @change="() => onClientChange()"
               >
                 <option value="">Select a client</option>
                 <option v-for="client in clients" :key="client.id" :value="client.id">
                   {{ client.name }}
                 </option>
               </select>
-              <p v-if="errors.client_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ errors.client_id[0] }}
-              </p>
+              <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Client cannot be changed after creation.</p>
+            </div>
+
+            <!-- Billing Month (read-only) -->
+            <div>
+              <label for="billing_month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Billing Month
+              </label>
+              <input
+                id="billing_month"
+                v-model="form.billing_month"
+                type="month"
+                disabled
+                class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Billing month cannot be changed after creation.</p>
             </div>
 
             <!-- Project Selection -->
@@ -379,7 +392,7 @@
                     </td>
                     <td class="py-2 pr-2">
                       <div class="px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 font-medium text-gray-900 dark:text-white text-right whitespace-nowrap">
-                        {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(item.quantity * item.unit_price) }}
+                        {{ selectedCurrency?.symbol ?? '' }} {{ formatCurrency(item.quantity * item.unit_price) }}
                       </div>
                     </td>
                     <td class="py-2">
@@ -469,7 +482,7 @@
             <div class="flex justify-between">
               <span class="text-sm text-gray-500 dark:text-gray-400">Subtotal:</span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(subtotal) }}
+                {{ selectedCurrency?.symbol ?? '' }} {{ formatCurrency(subtotal) }}
               </span>
             </div>
 
@@ -478,7 +491,7 @@
                 {{ form.tax_label || 'Tax' }} ({{ form.tax_rate }}%):
               </span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(taxAmount) }}
+                {{ selectedCurrency?.symbol ?? '' }} {{ formatCurrency(taxAmount) }}
               </span>
             </div>
 
@@ -486,7 +499,7 @@
               <div class="flex justify-between">
                 <span class="text-base font-medium text-gray-900 dark:text-white">Total:</span>
                 <span class="text-base font-medium text-gray-900 dark:text-white">
-                  {{ selectedCurrency?.code ?? '' }} {{ formatCurrency(total) }}
+                  {{ selectedCurrency?.symbol ?? '' }} {{ formatCurrency(total) }}
                 </span>
               </div>
             </div>
@@ -575,6 +588,7 @@ const form = reactive({
   exchange_rate: 1.000000,
   tax_rate: 0,
   tax_label: '',
+  billing_month: '',
   items: [] as Array<{
     _mode: 'service' | 'direct'
     _showMore: boolean
@@ -616,11 +630,12 @@ const populateForm = async () => {
   form.invoice_date = invoice.invoice_date
   form.due_date = invoice.due_date ?? ''
   form.notes = invoice.notes ?? ''
-  form.currency_id = invoice.currency_id ?? ''
+  form.currency_id = invoice.currency_id ?? invoice.currency?.id ?? ''
   form.calculation_type = (invoice as any).calculation_type ?? 'multiply'
   form.exchange_rate = invoice.exchange_rate
   form.tax_rate = invoice.tax_rate
   form.tax_label = invoice.tax_label ?? ''
+  form.billing_month = invoice.billing_month ? invoice.billing_month.slice(0, 7) : ''
   form.items = (invoice.items ?? []).map(item => ({
     _mode: item.service_id ? 'service' : 'direct' as 'service' | 'direct',
     _showMore: false,
@@ -707,6 +722,7 @@ const submitUpdate = async () => {
 
   const updated = await invoiceStore.updateInvoice(currentInvoice.value.id, {
     ...form,
+    billing_month: form.billing_month ? `${form.billing_month}-01` : null,
     items: form.items.map(({ _mode, _showMore, ...item }) => ({
       ...item,
       unit_price_base_currency: null,

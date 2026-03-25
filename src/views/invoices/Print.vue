@@ -213,9 +213,9 @@ const error = ref('')
 // Toggle options — key matches what show() checks
 const toggleOptions = reactive([
   { key: 'title',         label: 'Item Title',          enabled: true  },
-  { key: 'description',   label: 'Description',         enabled: true  },
+  { key: 'description',   label: 'Description',         enabled: false  },
   { key: 'itemNotes',     label: 'Item Notes',          enabled: false },
-  { key: 'dateRange',     label: 'Date Range',          enabled: true },
+  { key: 'dateRange',     label: 'Date Range',          enabled: false },
   { key: 'qty',           label: 'Quantity',            enabled: true },
   { key: 'itemCount',     label: 'Item Count',          enabled: true  },
   { key: 'invoiceDate',   label: 'Invoice Date',        enabled: false },

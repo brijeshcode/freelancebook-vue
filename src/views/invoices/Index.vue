@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 min-w-0 overflow-x-hidden">
     <!-- Header Section -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -123,6 +123,17 @@
             <option value="100">100</option>
           </select>
         </div>
+
+        <!-- Clear Filters -->
+        <div v-if="hasActiveFilters" class="flex items-end">
+          <button
+            @click="invoiceStore.resetFilters()"
+            class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+          >
+            <X class="h-4 w-4 mr-1.5" />
+            Clear Filters
+          </button>
+        </div>
       </div>
     </div>
 
@@ -210,7 +221,7 @@
     </div>
 
     <!-- Invoices Table -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
       <div v-if="loading" class="p-8 text-center">
         <Loader2 class="h-8 w-8 animate-spin mx-auto text-blue-600 dark:text-blue-400" />
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading invoices...</p>
@@ -304,7 +315,7 @@
                     Tax: {{ invoice.currency?.symbol }} {{ formatCurrency(invoice.tax_amount) }}
                   </div>
                   <div class="text-gray-500 dark:text-gray-400">
-                    Subtotal: {{ invoice.currency?.symbol }} {{ formatCurrency(invoice.subtotal) }}
+                    Base Total: {{ formatCurrency(invoice.total_amount_base_currency) }}
                   </div>
                 </div>
               </td>
@@ -334,12 +345,10 @@
               <!-- Status -->
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex flex-col space-y-1">
-                  <span
-                    class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                    :class="getStatusClass(invoice.status)"
-                  >
-                    {{ getStatusLabel(invoice.status) }}
-                  </span>
+                  <InvoiceStatusDropdown
+                    :invoice-id="invoice.id"
+                    :status="invoice.status"
+                  />
                   <span
                     v-if="isOverdue(invoice)"
                     class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
@@ -524,7 +533,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useInvoiceStore } from '@/stores/InvoiceStore'
@@ -546,9 +555,11 @@ import {
   ChevronRight,
   AlertTriangle,
   DollarSign,
-  Clock
+  Clock,
+  X
 } from 'lucide-vue-next'
 import type { Invoice } from '@/services/System/InvoiceService'
+import InvoiceStatusDropdown from '@/Components/InvoiceStatusDropdown.vue'
 
 const router = useRouter()
 const notifications = useNotifications()
@@ -559,17 +570,27 @@ const clientStore = useClientStore()
 const { invoices, pagination, stats, loading, deleting, filters } = storeToRefs(invoiceStore)
 const { clients } = storeToRefs(clientStore)
 
+const hasActiveFilters = computed(() =>
+  !!(filters.value.search || filters.value.status || filters.value.client_id || filters.value.date_from || filters.value.billing_month)
+)
+
 // Local UI state
 const showDeleteModal = ref(false)
 const invoiceToDelete = ref<Invoice | null>(null)
 const searchTimeout = ref<number | null>(null)
 
 // Methods
-const fetchInvoices = () => invoiceStore.fetchInvoices(1)
+const fetchInvoices = () => {
+  invoiceStore.fetchInvoices(1)
+  invoiceStore.fetchStats()
+}
 
 const debounceSearch = () => {
   if (searchTimeout.value) clearTimeout(searchTimeout.value)
-  searchTimeout.value = setTimeout(() => invoiceStore.fetchInvoices(1), 300)
+  searchTimeout.value = setTimeout(() => {
+    invoiceStore.fetchInvoices(1)
+    invoiceStore.fetchStats()
+  }, 300)
 }
 
 const changePage = (page: number) => {
@@ -593,27 +614,6 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const getStatusClass = (status: string): string => {
-  const classes = {
-    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
-    sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
-    paid: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    overdue: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-    cancelled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-  }
-  return classes[status as keyof typeof classes] || classes.draft
-}
-
-const getStatusLabel = (status: string): string => {
-  const labels = {
-    draft: 'Draft',
-    sent: 'Sent',
-    paid: 'Paid',
-    overdue: 'Overdue',
-    cancelled: 'Cancelled'
-  }
-  return labels[status as keyof typeof labels] || status
-}
 
 const isOverdue = (invoice: Invoice): boolean => {
   if (!invoice.due_date || invoice.status === 'paid' || invoice.status === 'cancelled') return false
